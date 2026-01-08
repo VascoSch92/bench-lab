@@ -1,9 +1,8 @@
+import os
 from typing import Callable, final
 
 from benchlab._core._benchmark import Benchmark
 from benchlab._benchmarks._gpqa._instances import GPQAInstance
-
-# TODO: delete your token :-)
 
 
 class GPQABenchmark(Benchmark[GPQAInstance]):
@@ -18,7 +17,7 @@ class GPQABenchmark(Benchmark[GPQAInstance]):
         ds = load_dataset(
             "Idavidrein/gpqa",
             "gpqa_diamond",
-            token="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",
+            token=os.getenv("HF_TOKEN"),
         )
 
         print(ds)
