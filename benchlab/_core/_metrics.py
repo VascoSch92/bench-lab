@@ -1,18 +1,16 @@
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Generic, final, ClassVar, TypeAlias, Final, Type
+from typing import Generic, ClassVar, Final, Type
 
-from benchlab._core._benchmark import InstanceType
 from benchlab._core._instances import MetricStats, Attempt
 from benchlab._core._stats import (
     RegressionMetricStats,
     BooleanMetricStats,
     CategoricalMetricStats,
 )
-
-MetricOutput: TypeAlias = int | float | None
+from benchlab._core._types import MetricOutputType, InstanceType
 
 
 class MetricType(StrEnum):
@@ -36,61 +34,49 @@ _METRIC_TYPE_TO_STATS: Final[dict[MetricType, Type[MetricStats]]] = {
 
 
 @dataclass(frozen=True, slots=True)
-class Metric(ABC, Generic[InstanceType]):
+class Metric(ABC, Generic[InstanceType, MetricOutputType]):
     """Base class for a metric."""
 
     name: ClassVar[str]
     """"Name of the metric"""
 
+    # todo: do we need that?
     benchmarks: ClassVar[list[str]]
     """Benchmarks on which the metric can be computed."""
 
     type_: ClassVar[MetricType]
     """Type of the metric."""
 
-    logger: logging.Logger
+    logger: logging.Logger = field(default_factory=lambda: logging.getLogger("null"))
     """Logger for the metric."""
 
-    def evaluate(self, instance: InstanceType) -> None:
-        if self.name in instance.metrics:
+    def evaluate(
+        self, instance: InstanceType, attempts: list[Attempt]
+    ) -> list[MetricOutputType]:
+        if self.name in instance.stats:
             self.logger.warning(
                 f"Metric `{self.name}` already evaluated. It will be overwritten."
             )
 
-        # TODO: notify and log
+        # TODO: log
         values = [
-            self.eval_logic(instance=instance, attempt=attempt)
-            for attempt in instance.attempts
+            self._eval_logic(instance=instance, attempt=attempt) for attempt in attempts
         ]
-
-        stats = _METRIC_TYPE_TO_STATS[self.type_].from_eval(values)
-
-        instance.update_metric_stats(
-            name=self.name,
-            stats=stats,
-        )
 
         self.logger.debug(f"Instance {instance.id} evaluate on metric {self.name}")
 
-    @abstractmethod
-    def eval_logic(self, instance: InstanceType, attempt: Attempt) -> MetricOutput: ...
-
-    @final
-    async def evaluate_async(self, instance: InstanceType) -> None:
-        if self.name in instance.metrics:
-            # TODO: log and notify here
-            return None
-        # TODO: notify and log
-        # todo: this should be change because is not async
-        values = [
-            await self.eval_logic_async(instance=instance, attempt=attempt)
-            for attempt in instance.attempts
-        ]
-        instance.update_metric_stats(
-            name=self.name, stats=MetricStats.from_eval(values)
-        )
+        return values
 
     @abstractmethod
-    async def eval_logic_async(
+    def _eval_logic(
         self, instance: InstanceType, attempt: Attempt
-    ) -> MetricOutput: ...
+    ) -> MetricOutputType: ...
+
+    async def evaluate_async(self, instance: InstanceType) -> list[MetricOutputType]:
+        # todo: complete here
+        return []
+
+    @abstractmethod
+    async def _eval_logic_async(
+        self, instance: InstanceType, attempt: Attempt
+    ) -> MetricOutputType: ...

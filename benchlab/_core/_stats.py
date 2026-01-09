@@ -1,95 +1,112 @@
+import collections
 import math
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import Self, Generic
+
+import numpy as np
+
+from benchlab._core._types import (
+    MetricOutputType,
+    RegressionOutputType,
+    BooleanOutputType,
+    CategoricalOutputType,
+)
 
 
 @dataclass(frozen=True)
-class MetricStats(ABC):
+class MetricStats(ABC, Generic[MetricOutputType]):
+    metric_name: str
+    """Name of the metric associated to the stats."""
+
     n_attempts: int
+    """Total number of attempts."""
+
     n_valid_attempts: int
+    """Total number of valid attempts, i.e., not `None`"""
 
     @classmethod
     @abstractmethod
-    def from_eval(cls, values: list[Any | None]) -> "MetricStats": ...
+    def from_eval(cls, metric_name: str, values: list[MetricOutputType]) -> Self: ...
+
+    @classmethod
+    def aggregate(cls, stats: list[Self]) -> Self:
+        if len(stats) == 0:
+            raise ValueError("Empty stats list")
+        if len({s.metric_name for s in stats}) != 1:
+            raise ValueError("All stats must have the same metric")
+        return cls._aggregate(values=stats)
 
     @classmethod
     @abstractmethod
-    def aggregate(cls, values: list["MetricStats"]) -> "MetricStats": ...
+    def _aggregate(cls, values: list[Self]) -> Self: ...
 
 
-@dataclass(frozen=True)
-class RegressionMetricStats(MetricStats):
+@dataclass(frozen=True, slots=True)
+class RegressionMetricStats(MetricStats[RegressionOutputType]):
     mean: float
     std: float
     min: float
     max: float
 
     @classmethod
-    def from_eval(cls, values: list[int | float | None]) -> "MetricStats":
-        n_attempts = len(values)
+    def from_eval(cls, metric_name: str, values: list[RegressionOutputType]) -> Self:
+        vector = np.array(values, dtype=float)
 
-        valid_values = [v for v in values if v is not None]
-        n_valid_attempts = len(valid_values)
-
+        n_valid_attempts = int(vector.size - np.count_nonzero(~np.isnan(vector)))
         if n_valid_attempts == 0:
+            # todo: do we want to raise an error here?
             raise ValueError("Cannot compute MetricStats: all values are None")
 
-        mean = sum(valid_values) / n_valid_attempts
-
-        if n_valid_attempts == 1:
-            std = 0.0
-        else:
-            variance = sum((v - mean) ** 2 for v in valid_values) / n_valid_attempts
-            std = math.sqrt(variance)
+        mean = np.nanmean(vector)
+        std = np.nanstd(vector)
 
         return cls(
-            n_attempts=n_attempts,
+            metric_name=metric_name,
+            n_attempts=vector.size,
             n_valid_attempts=n_valid_attempts,
-            mean=mean,
-            std=std,
-            min=min(valid_values),
-            max=max(valid_values),
+            mean=float(mean),
+            std=float(std),
+            min=np.nanmin(vector),
+            max=np.nanmax(vector),
         )
 
     @classmethod
-    def aggregate(
-        cls, values: list["RegressionMetricStats"]
-    ) -> "RegressionMetricStats":
-        if not values:
-            raise ValueError("Cannot aggregate empty list of MetricStats")
+    def _aggregate(cls, stats: list[Self]) -> Self:
+        # Convert attributes to numpy array
+        n_attempts = np.array([v.n_attempts for v in stats])
+        n_valid = np.array([v.n_valid_attempts for v in stats])
+        means = np.array([v.mean for v in stats])
+        stds = np.array([v.std for v in stats])
+        mins = np.array([v.min for v in stats])
+        maxs = np.array([v.max for v in stats])
 
-        total_attempts = sum(v.n_attempts for v in values)
-        total_valid = sum(v.n_valid_attempts for v in values)
-
+        total_valid = np.sum(n_valid)
         if total_valid == 0:
             raise ValueError("No valid attempts to aggregate")
 
-        # Weighted mean
-        weighted_sum = sum(v.mean * v.n_valid_attempts for v in values)
-        mean_value = weighted_sum / total_valid
+        # weighted mean
+        mean_value = np.average(means, weights=n_valid)
 
-        # Weighted population variance
-        weighted_var_sum = sum(
-            v.n_valid_attempts * (v.std**2 + (v.mean - mean_value) ** 2) for v in values
-        )
-        std_value = math.sqrt(weighted_var_sum / total_valid)
-
-        min_value = min(v.min for v in values)
-        max_value = max(v.max for v in values)
+        # combined standard deviation
+        variances = stds**2
+        squared_diffs = (means - mean_value) ** 2
+        pooled_var = np.sum(n_valid * (variances + squared_diffs)) / total_valid
+        std_value = np.sqrt(pooled_var)
 
         return cls(
-            n_attempts=total_attempts,
-            n_valid_attempts=total_valid,
-            mean=mean_value,
-            std=std_value,
-            min=min_value,
-            max=max_value,
+            metric_name=stats[0].metric_name,
+            n_attempts=int(np.sum(n_attempts)),
+            n_valid_attempts=int(total_valid),
+            mean=float(mean_value),
+            std=float(std_value),
+            min=float(np.min(mins)),
+            max=float(np.max(maxs)),
         )
 
 
 @dataclass(frozen=True)
-class BooleanMetricStats(MetricStats):
+class BooleanMetricStats(MetricStats[BooleanOutputType]):
     n_true: int
     n_false: int
 
@@ -144,48 +161,111 @@ class BooleanMetricStats(MetricStats):
         return max(0.0, center - margin), min(1.0, center + margin)
 
     @classmethod
-    def from_eval(cls, values: list[bool | None]) -> "BooleanMetricStats":
-        values = list(values)
+    def from_eval(cls, metric_name: str, values: list[BooleanOutputType]) -> Self:
+        vector: np.ndarray = np.array(values, dtype=bool)
 
-        n_attempts = len(values)
-        valid = [v for v in values if v is not None]
+        n_valid_attempts = int(vector.size - np.count_nonzero(~np.isnan(vector)))
+        if n_valid_attempts == 0:
+            raise ValueError("Cannot compute MetricStats: all values are None")
 
-        n_valid_attempts = len(valid)
-        n_true = sum(1 for v in valid if v)
-        n_false = n_valid_attempts - n_true
-
+        n_true = np.nansum(vector)
         return cls(
-            n_attempts=n_attempts,
+            metric_name=metric_name,
+            n_attempts=vector.size,
             n_valid_attempts=n_valid_attempts,
-            n_true=n_true,
-            n_false=n_false,
+            n_true=np.nansum(vector),
+            n_false=n_valid_attempts - n_true,
         )
 
     @classmethod
-    def aggregate(cls, values: list["BooleanMetricStats"]) -> "BooleanMetricStats":
-        n_attempts = sum(v.n_attempts for v in values)
-        n_valid_attempts = sum(v.n_valid_attempts for v in values)
-        n_true = sum(v.n_true for v in values)
-        n_false = n_valid_attempts - n_true
+    def _aggregate(cls, stats: list[Self]) -> Self:
+        # create numpy array of shape ( # stats, 3)
+        data = np.array([(v.n_attempts, v.n_valid_attempts, v.n_true) for v in stats])
+
+        # sums will contain [total_attempts, total_valid_attempts, total_true]
+        n_attempts, n_valid_attempts, n_true = data.sum(axis=0)
+
         return cls(
-            n_attempts=n_attempts,
-            n_valid_attempts=n_valid_attempts,
-            n_true=n_true,
-            n_false=n_false,
+            metric_name=stats[0].metric_name,
+            n_attempts=int(n_attempts),
+            n_valid_attempts=int(n_valid_attempts),
+            n_true=int(n_true),
+            n_false=n_valid_attempts - n_true,
         )
 
 
 @dataclass(frozen=True)
-class CategoricalMetricStats(MetricStats):
-    counts: dict[str, int]
-    frequencies: dict[str, float]
-    mode: str | None
+class CategoricalMetricStats(MetricStats[CategoricalOutputType]):
+    metric_name: str
+    counts: dict[CategoricalOutputType, int]
+    frequencies: dict[CategoricalOutputType, float]
+    mode: CategoricalOutputType
 
     @classmethod
-    def from_eval(cls, values: list[Any | None]) -> "CategoricalMetricStats":
-        # todo: complete
-        raise NotImplementedError
+    def from_eval(cls, metric_name: str, values: list[CategoricalOutputType]) -> Self:
+        if not values:
+            return cls(
+                n_attempts=0,
+                n_valid_attempts=0,
+                metric_name=metric_name,
+                counts={},
+                frequencies={},
+                mode=None,
+            )
+
+        vector = np.array(values)
+
+        # unique elements and their counts
+        unique, counts = np.unique(vector, return_counts=True)
+
+        # build dict
+        counts_dict = dict(zip(unique.tolist(), counts.tolist()))
+        total = len(values)
+        freq_dict = {k: v / total for k, v in counts_dict.items()}
+
+        # find mode (the element with the maximum count)
+        mode_val = unique[np.argmax(counts)]
+        if str(mode_val).isdigit():
+            mode_val = int(mode_val)
+        else:
+            mode_val = str(mode_val)
+
+        return cls(
+            metric_name=metric_name,
+            n_attempts=vector.size,
+            n_valid_attempts=int(vector.size - np.count_nonzero(~np.isnan(vector))),
+            counts=counts_dict,
+            frequencies=freq_dict,
+            mode=mode_val,
+        )
 
     @classmethod
-    def aggregate(cls, values: list["MetricStats"]) -> "CategoricalMetricStats":
-        raise NotImplementedError
+    def _aggregate(cls, stats: list[Self]) -> Self:
+        if not stats:
+            raise ValueError("No stats provided to aggregate")
+
+        # aggregate counts using a Counter
+        total_counts: collections.Counter[CategoricalOutputType] = collections.Counter()
+        n_attempts, n_valid_attempts = 0, 0
+        for s in stats:
+            n_attempts += s.n_attempts
+            n_valid_attempts += s.n_valid_attempts
+            total_counts.update(s.counts)
+
+        # 2. Convert back to dict and calculate new frequencies
+        final_counts = dict(total_counts)
+        total_sum = sum(final_counts.values())
+        final_freqs = {k: v / total_sum for k, v in final_counts.items()}
+
+        # determine the new mode from the aggregated counts
+        common = total_counts.most_common(1)
+        final_mode = common[0][0] if common else None
+
+        return cls(
+            metric_name=stats[0].metric_name,
+            n_attempts=n_attempts,
+            n_valid_attempts=n_valid_attempts,
+            counts=final_counts,
+            frequencies=final_freqs,
+            mode=final_mode,
+        )

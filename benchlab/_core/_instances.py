@@ -1,11 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TypeAlias
 from types import MappingProxyType
-from benchlab._core._stats import MetricStats
+from typing import Any
 
-AnswerType: TypeAlias = str | None
+from benchlab._core._stats import MetricStats
+from benchlab._core._types import AnswerType, MetricOutputType
 
 
 class AttemptStatus(StrEnum):
@@ -23,13 +23,13 @@ class AttemptStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Attempt:
-    _response: AnswerType | None
+    _response: AnswerType
     _runtime: float
     _status: AttemptStatus
 
     @classmethod
     def new(
-        cls, response: AnswerType | None, runtime: float, status: AttemptStatus
+        cls, response: AnswerType, runtime: float, status: AttemptStatus
     ) -> "Attempt":
         return cls(response, runtime, status)
 
@@ -38,14 +38,19 @@ class Attempt:
         return self._response
 
     @property
-    def runtime(self) -> float | None:
+    def runtime(self) -> float:
         return self._runtime
 
     @property
     def status(self) -> AttemptStatus:
         return self._status
 
-
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "_response": self.response,
+            "_runtime": self.runtime,
+            "_status": self.status,
+        }
 
 
 @dataclass(slots=True, kw_only=True)
@@ -56,9 +61,12 @@ class Instance(ABC):
     """Unique id of the instance."""
 
     _attempts: list[Attempt] = field(default_factory=list)
-    """Answers produced for this instance, one per attempt."""
+    """Attempts produced by the benchmark."""
 
-    _metrics: dict[str, MetricStats] = field(default_factory=dict)
+    _evaluations: dict[str, list[MetricOutputType]] = field(default_factory=dict)
+    """Evaluations of attempts. Map metric name to evaluation results."""
+
+    _stats: list[MetricStats] = field(default_factory=list)
     """Metrics stats produced for this instance."""
 
     @property
@@ -67,35 +75,50 @@ class Instance(ABC):
 
     @property
     def responses(self) -> list[AnswerType | None]:
-        return [attempt.response for attempt in self._attempts]
+        return [attempt.response for attempt in self.attempts]
 
     @property
-    def runtimes(self) -> list[float | None]:
-        return [attempt.runtime for attempt in self._attempts]
+    def runtimes(self) -> list[float]:
+        return [attempt.runtime for attempt in self.attempts]
 
     @property
     def statuses(self) -> list[AttemptStatus]:
-        return [attempt.status for attempt in self._attempts]
+        return [attempt.status for attempt in self.attempts]
 
     @property
-    def metrics(self) -> MappingProxyType[str, MetricStats]:
-        return MappingProxyType(self._metrics)
+    def evaluations(self) -> MappingProxyType[str, list[MetricOutputType]]:
+        return MappingProxyType(self._evaluations)
 
-    def add_attempt(
-        self, response: AnswerType | None, runtime: float, status: str
-    ) -> None:
+    @property
+    def stats(self) -> list[MetricStats]:
+        return self._stats
+
+    def add_attempt(self, response: AnswerType, runtime: float, status: str) -> None:
         if runtime < 0.0:
             raise ValueError(f"Runtime must be greater than zero. Got {runtime}")
         if status not in AttemptStatus:
             raise ValueError(f"Status must be one of {AttemptStatus.__members__}")
-        self._attempts.append(Attempt.new(response, runtime, AttemptStatus(status)))
 
-    def update_metric_stats(self, name: str, stats: MetricStats) -> None:
-        if name in self._metrics:
-            # TODO: should we raise an error?
-            raise ValueError(f"Metric {name} already set")
-        self._metrics[name] = stats
+        attempt = Attempt.new(response, runtime, AttemptStatus(status))
+        self._attempts.append(attempt)
+
+    def add_eval(self, metric_name: str, value: Any) -> None:
+        self._evaluations[metric_name] = value
 
     @property
     @abstractmethod
     def ground_truth(self) -> AnswerType: ...
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "class_module": self.__class__.__module__,
+            "class_name": self.__class__.__name__,
+            "id": self.id,
+            "_attempts": [attempt.to_dict() for attempt in self._attempts],
+            "_evaluations": self._evaluations,
+            "_metrics": self._stats,
+            **self._to_dict(),
+        }
+
+    @abstractmethod
+    def _to_dict(self) -> dict[str, Any]: ...

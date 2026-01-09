@@ -1,25 +1,20 @@
+import copy
+import json
 from abc import ABC, abstractmethod
-from typing import Generic, TypeVar, Callable, final, ClassVar, TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
+from typing import Generic, final, ClassVar
 
-from rich.console import Console
-from rich.table import Table
-from benchlab._core._instances import Instance, AnswerType, MetricStats
+from benchlab._core._benchmark._execution import BenchmarkExec
 from benchlab._core._logging import get_logger
-from benchlab._core._tables import get_table_for_instance, export_table
+from benchlab._core._metrics import Metric
 from benchlab._core._time import _timed_exec
-
-if TYPE_CHECKING:
-    from benchlab._core._metrics import Metric
-
-
-InstanceType = TypeVar("InstanceType", bound=Instance)
+from benchlab._core._types import BenchmarkCallable, InstanceType
 
 # TODO: add token usage or better usage
 # todo: check how logger works if we have a logger in our main program
 # todo: update logging to use rich
 # todo: add callback method to stop retrying
-# todo: divide run and eval from the API
-# todo: method to save the output from a run
 
 __all__ = ["Benchmark"]
 
@@ -44,9 +39,7 @@ class Benchmark(ABC, Generic[InstanceType]):
 
         self.name = name
 
-        self._metrics: dict[str, "Metric"] = {}
-        self._register_metric(metrics)
-        self._metrics_table: Table | None = None
+        self._metrics: list[Metric] = self._register_metric(metrics or [])
 
         if n_instance is not None and n_instance <= 0:
             raise ValueError(
@@ -60,6 +53,8 @@ class Benchmark(ABC, Generic[InstanceType]):
         self.instance_ids = instance_ids or []
         self.n_instance = n_instance
 
+        if n_attempts <= 0:
+            raise ValueError("Argument `n_attempts` must be strictly positive integer.")
         self.n_attempts = n_attempts  # todo: check that it is positive
 
         if timeout is not None and timeout <= 0.0:
@@ -68,20 +63,17 @@ class Benchmark(ABC, Generic[InstanceType]):
             )
         self.timeout = timeout
 
-        self._instances: list[Instance] | None = None
+        self._instances: list[InstanceType] | None = None
 
-        self._instances_table: Table | None = None
-
-    def _register_metric(self, metric_names: list[str] | None) -> None:
-        if metric_names is None:
-            return None
+    def _register_metric(self, metric_names: list[str]) -> list[Metric]:
         if len(metric_names) != len(set(metric_names)):
             raise ValueError(
                 "Duplicated metric names detected. Metric names must be unique."
             )
 
+        metrics: list[Metric] = []
         for metric_name in metric_names:
-            metric_cls = type(self)._METRICS.get(metric_name)
+            metric_cls = type(self)._METRICS.get(metric_name, None)
 
             if metric_cls is None:
                 raise ValueError(
@@ -89,7 +81,20 @@ class Benchmark(ABC, Generic[InstanceType]):
                     f"Available metrics: {sorted(type(self)._METRICS.keys())}"
                 )
 
-            self._metrics[metric_name] = metric_cls(logger=self.logger)
+            metrics.append(metric_cls(logger=self.logger))
+        return metrics
+
+    def metadata(self) -> dict[str, Any]:
+        metadata: dict[str, Any] = {"name": self.name}
+
+        if self.n_instance is not None:
+            metadata["n_instance"] = self.n_instance
+        if self.n_attempts is not None:
+            metadata["n_attempts"] = self.n_attempts
+        if self.timeout is not None:
+            metadata["timeout"] = self.timeout
+
+        return metadata
 
     @classmethod
     def new(
@@ -101,7 +106,7 @@ class Benchmark(ABC, Generic[InstanceType]):
         n_attempts: int = 1,
         timeout: float | None = None,
         logs_filepath: str | None = None,
-    ) -> "Benchmark":
+    ) -> "Benchmark[Any]":
         match name:
             case "GPQA":
                 from benchlab._benchmarks._gpqa._benchmark import GPQABenchmark
@@ -128,7 +133,7 @@ class Benchmark(ABC, Generic[InstanceType]):
                 )
 
     @final
-    def load_dataset(self) -> list[Instance]:
+    def load_dataset(self) -> list[InstanceType]:
         if self._instances is None:
             self.logger.info("Loading dataset from source")
 
@@ -141,7 +146,7 @@ class Benchmark(ABC, Generic[InstanceType]):
         self.logger.info("Dataset retrieved from cache")
         return self._instances
 
-    def _filter_instances(self, dataset: list[Instance]) -> list[Instance]:
+    def _filter_instances(self, dataset: list[InstanceType]) -> list[InstanceType]:
         """Private method to filter a dataset"""
         filter_dataset = dataset
         if self.instance_ids:
@@ -153,18 +158,22 @@ class Benchmark(ABC, Generic[InstanceType]):
         return filter_dataset
 
     @abstractmethod
-    def _load_dataset(self) -> list[Instance]: ...
+    def _load_dataset(self) -> list[InstanceType]: ...
 
     def run(
         self,
-        fn: Callable[[InstanceType, ...], AnswerType],
+        fn: BenchmarkCallable,
         args: dict[str, Any] | None = None,
-    ) -> None:
-        self.logger.info(f"Running benchmark for {fn.__name__}")
+    ) -> BenchmarkExec:
+        self.logger.info(f"Running benchmark {self.name} for {fn.__name__}")
+
         if self._instances is None:
             self._instances = self.load_dataset()
 
-        for instance in self._instances:
+        # deepcopy instances to not change the ones owned by the benchmark
+        instances = copy.deepcopy(self._instances)
+
+        for instance in instances:
             for attempt_id in range(1, self.n_attempts + 1):
                 timed_exec = _timed_exec(fn, self.timeout, instance, **(args or {}))
 
@@ -186,57 +195,31 @@ class Benchmark(ABC, Generic[InstanceType]):
                     status=status,
                 )
 
-            for metric in self._metrics.values():
-                metric.evaluate(instance)
+        return BenchmarkExec(
+            instances=instances,
+            metrics=self._metrics,
+            logger=self.logger,
+            metadata=self.metadata(),
+        )
 
     async def run_async(self) -> None: ...
 
-    def display_results(self) -> None:
-        """
-        Display benchmark results in a formatted console table using Rich.
-        Caches the table after first generation.
-        """
+    def to_json(self, output_path: Path | str) -> None:
+        output_path = Path(output_path)
+
+        if not output_path.suffix:
+            output_path = output_path.with_suffix(".json")
+
         if self._instances is None:
-            raise ValueError("No instances available.")
+            self._instances = self.load_dataset()
 
-        console = Console()
+        file = {
+            "metadata": self.metadata(),
+            "instances": [instance.to_dict() for instance in self._instances],
+        }
+        with output_path.open("w") as f:
+            json.dump(file, f, indent=4)
 
-        if self._instances_table is not None:
-            # if table is cached, we print it
-            console.print(self._instances_table)
-            return None
 
-        table = get_table_for_instance(instances=self._instances, metrics=self._metrics)
-        # cache table
-        self._instances_table = table
-
-        console.print(table)
-
-    def export_results(self, filepath: str) -> None:
-        if self._instances_table is None:
-            self._instances_table = get_table_for_instance(
-                instances=self._instances or [], metrics=self._metrics
-            )
-
-        export_table(self._instances_table, filepath=filepath)
-
-    def display_metrics(self) -> None:
-        if not self._metrics or not self._instances:
-            raise ValueError("No metrics available.")
-
-        if self._metrics_table is not None:
-            print(self._metrics_table)
-            return None
-
-        aggregate_metric: dict[str, MetricStats] = {}
-        for metric_name, metric in self._metrics.items():
-            values = [instance._metrics[metric_name] for instance in self._instances]
-
-            aggregate_metric[metric_name] = MetricStats.aggregate(values=values)
-
-        table = []
-        for metric_name, agg_value in aggregate_metric.items():
-            table.append(f"{metric_name}: {agg_value}")
-
-        self._metrics_table = table
-        print(table)
+class BenchmarkArtifact(ABC):
+    pass

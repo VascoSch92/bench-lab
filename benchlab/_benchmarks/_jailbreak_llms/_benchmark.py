@@ -1,15 +1,21 @@
-from benchlab import Benchmark
-from typing import final
-from benchlab._benchmarks._jailbreak_llms._instances import JailbreakLLMsInstance
 import csv
-import urllib.request
 import io
+import urllib.request
+from typing import final
 
-from benchlab._benchmarks._jailbreak_llms._metrics import JailbreakLLMsMetric
+from benchlab import Benchmark
+from benchlab._benchmarks._jailbreak_llms._instances import JailbreakLLMsInstance
+from benchlab._benchmarks._jailbreak_llms._metrics import (
+    JailbreakCheckerMetric,
+    JailbreakCheckerUnsureMetric,
+)
 
 
 class JailbreakLLMsBenchmark(Benchmark[JailbreakLLMsInstance]):
-    _METRICS = {"jailbreak_llms_checker": JailbreakLLMsMetric}
+    _METRICS = {
+        "jailbreak_checker": JailbreakCheckerMetric,
+        "jailbreak_checker_unsure": JailbreakCheckerUnsureMetric,
+    }
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
@@ -24,7 +30,7 @@ class JailbreakLLMsBenchmark(Benchmark[JailbreakLLMsInstance]):
 
         return [
             JailbreakLLMsInstance(
-                id=f"{row['content_policy_id']}__{row['q_id']}",
+                id=f"{row['content_policy_id']}_{row['q_id']}",
                 content_policy_id=row["content_policy_id"],
                 content_policy_name=row["content_policy_name"],
                 question=row["question"],

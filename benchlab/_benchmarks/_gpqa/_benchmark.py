@@ -1,7 +1,7 @@
 import os
-from typing import Callable, final
+from typing import final
 
-from benchlab._core._benchmark import Benchmark
+from benchlab._core._benchmark._benchmark import Benchmark
 from benchlab._benchmarks._gpqa._instances import GPQAInstance
 
 
@@ -22,9 +22,3 @@ class GPQABenchmark(Benchmark[GPQAInstance]):
 
         print(ds)
         return []
-
-    @final
-    def run_eval(self, fn: Callable[[GPQAInstance], GPQAInstance]) -> None: ...
-
-    @final
-    async def run_eval_async(self) -> None: ...

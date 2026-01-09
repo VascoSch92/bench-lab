@@ -7,6 +7,7 @@ from typing import Callable
 
 # todo: the current implementation is very slow. Can we do better and ensure a correct timeout?
 
+
 @dataclass(frozen=True, slots=True)
 class TimedExec:
     runtime: float
