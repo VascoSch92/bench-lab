@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Generic, ClassVar, Final, Type
 
 from benchlab._core._instances import MetricStats, Attempt
-from benchlab._core._stats import (
+from benchlab._core._evaluation._stats import (
     RegressionMetricStats,
     BooleanMetricStats,
     CategoricalMetricStats,

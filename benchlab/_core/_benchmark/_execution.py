@@ -8,7 +8,7 @@ from typing import Generic, Self
 from benchlab._core._benchmark._evaluation import BenchmarkEval
 from benchlab._core._benchmark._load_utils import get_instances_from_json
 from benchlab._core._types import InstanceType
-from benchlab._core._metrics import Metric
+from benchlab._core._evaluation._metrics import Metric
 
 __all__ = ["BenchmarkExec"]
 

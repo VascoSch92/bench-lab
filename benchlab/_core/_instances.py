@@ -4,7 +4,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
 
-from benchlab._core._stats import MetricStats
+from benchlab._core._evaluation._stats import MetricStats
 from benchlab._core._types import AnswerType, MetricOutputType
 
 

@@ -7,7 +7,7 @@ import yaml
 from rich.table import Table
 
 if TYPE_CHECKING:
-    from benchlab._core._metrics import Metric
+    from benchlab._core._evaluation._metrics import Metric
     from benchlab._core._instances import Instance
 
 

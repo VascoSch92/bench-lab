@@ -7,7 +7,7 @@ from typing import Generic, final, ClassVar
 
 from benchlab._core._benchmark._execution import BenchmarkExec
 from benchlab._core._logging import get_logger
-from benchlab._core._metrics import Metric
+from benchlab._core._evaluation._metrics import Metric
 from benchlab._core._time import _timed_exec
 from benchlab._core._types import BenchmarkCallable, InstanceType
 

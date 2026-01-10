@@ -4,7 +4,7 @@ from typing import ClassVar, final, Final
 
 from benchlab._benchmarks._jailbreak_llms._instances import JailbreakLLMsInstance
 from benchlab._core._instances import Attempt
-from benchlab._core._metrics import Metric, MetricType
+from benchlab._core._evaluation._metrics import Metric, MetricType
 from benchlab._core._types import BooleanOutputType
 
 # fmt: off

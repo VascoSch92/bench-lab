@@ -13,6 +13,10 @@ from benchlab._core._types import (
     CategoricalOutputType,
 )
 
+# todo: we can implement the ConfusionMatrixStats
+# todo: implement Rouge score with stats
+# todo: implement BLUE score with stats
+
 
 @dataclass(frozen=True)
 class MetricStats(ABC, Generic[MetricOutputType]):
