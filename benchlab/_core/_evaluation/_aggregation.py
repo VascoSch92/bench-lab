@@ -14,7 +14,7 @@ class Aggregator(ABC, Generic[AggregatorType]):
 @dataclass(frozen=True, slots=True)
 class BooleanAggregator(Aggregator[AggregatorBooleanType]):
     macro_average: float
-    
+
     micro_average: float
 
     pass_at_k: float
@@ -26,5 +26,4 @@ class BooleanAggregator(Aggregator[AggregatorBooleanType]):
     def from_stats(cls, stats: list[AggregatorBooleanType]) -> Self:
         pass
 
-    def estimated_pass_at_k(self) -> float:
-        ...
+    def estimated_pass_at_k(self) -> float: ...

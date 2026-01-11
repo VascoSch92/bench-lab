@@ -4,8 +4,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Self, Generic
 
-import numpy as np
-
 from benchlab._core._types import (
     MetricOutputType,
     RegressionOutputType,
@@ -55,6 +53,8 @@ class RegressionMetricStats(MetricStats[RegressionOutputType]):
 
     @classmethod
     def from_eval(cls, metric_name: str, values: list[RegressionOutputType]) -> Self:
+        import numpy as np
+
         vector = np.array(values, dtype=float)
 
         n_valid_attempts = int(vector.size - np.count_nonzero(~np.isnan(vector)))
@@ -77,6 +77,8 @@ class RegressionMetricStats(MetricStats[RegressionOutputType]):
 
     @classmethod
     def _aggregate(cls, stats: list[Self]) -> Self:
+        import numpy as np
+
         # Convert attributes to numpy array
         n_attempts = np.array([v.n_attempts for v in stats])
         n_valid = np.array([v.n_valid_attempts for v in stats])
@@ -166,6 +168,8 @@ class BooleanMetricStats(MetricStats[BooleanOutputType]):
 
     @classmethod
     def from_eval(cls, metric_name: str, values: list[BooleanOutputType]) -> Self:
+        import numpy as np
+
         vector: np.ndarray = np.array(values, dtype=bool)
 
         n_valid_attempts = int(vector.size - np.count_nonzero(~np.isnan(vector)))
@@ -183,6 +187,8 @@ class BooleanMetricStats(MetricStats[BooleanOutputType]):
 
     @classmethod
     def _aggregate(cls, stats: list[Self]) -> Self:
+        import numpy as np
+
         # create numpy array of shape ( # stats, 3)
         data = np.array([(v.n_attempts, v.n_valid_attempts, v.n_true) for v in stats])
 
@@ -207,6 +213,8 @@ class CategoricalMetricStats(MetricStats[CategoricalOutputType]):
 
     @classmethod
     def from_eval(cls, metric_name: str, values: list[CategoricalOutputType]) -> Self:
+        import numpy as np
+
         if not values:
             return cls(
                 n_attempts=0,

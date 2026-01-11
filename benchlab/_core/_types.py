@@ -10,6 +10,11 @@ if TYPE_CHECKING:
 InstanceType = TypeVar("InstanceType", bound="Instance")
 """Type Var for an instance."""
 
+
+AnswerType: TypeAlias = str | None
+"""Type alias for the answer type of a LLM."""
+
+
 @runtime_checkable
 class BenchmarkCallable(Protocol):
     """Protocol for callable runnable in a benchmark instance."""
@@ -19,10 +24,6 @@ class BenchmarkCallable(Protocol):
     def __call__(
         self, instance: InstanceType, *args: Any, **kwargs: Any
     ) -> AnswerType: ...
-
-
-AnswerType: TypeAlias = str | None
-"""Type alias for the answer type of a LLM."""
 
 
 """Typying for metric stats."""
@@ -45,5 +46,5 @@ CategoricalOutputType: TypeAlias = str | int | None
 AggregatorType = TypeVar("AggregatorType")
 """Type var for the aggregator Type"""
 
-AggregatorBooleanType: TypeAlias = BooleanMetricStats
+AggregatorBooleanType: TypeAlias = "BooleanMetricStats"
 """Type for aggregator on boolean stats."""

@@ -5,7 +5,7 @@ from benchlab._core._instances import Instance
 from benchlab._core._types import AnswerType
 
 
-@dataclass(slots=True, kw_only=True)
+@dataclass(slots=True, frozen=True, kw_only=True)
 class JailbreakLLMsInstance(Instance):
     content_policy_id: str
     content_policy_name: str

@@ -2,15 +2,18 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Generic, ClassVar, Final, Type
+from typing import Generic, ClassVar, Final, Type, TYPE_CHECKING, Any
 
-from benchlab._core._instances import MetricStats, Attempt
+from benchlab._core._instances import Attempt
 from benchlab._core._evaluation._stats import (
     RegressionMetricStats,
     BooleanMetricStats,
     CategoricalMetricStats,
 )
 from benchlab._core._types import MetricOutputType, InstanceType
+
+if TYPE_CHECKING:
+    from benchlab._core._evaluation._stats import MetricStats
 
 
 class MetricType(StrEnum):
@@ -26,7 +29,7 @@ class MetricType(StrEnum):
     """Metrics that produce discrete category labels."""
 
 
-_METRIC_TYPE_TO_STATS: Final[dict[MetricType, Type[MetricStats]]] = {
+_METRIC_TYPE_TO_STATS: Final[dict[MetricType, Type["MetricStats"]]] = {
     MetricType.REGRESSION: RegressionMetricStats,
     MetricType.BOOLEAN: BooleanMetricStats,
     MetricType.CATEGORICAL: CategoricalMetricStats,
@@ -66,6 +69,12 @@ class Metric(ABC, Generic[InstanceType, MetricOutputType]):
         self.logger.debug(f"Instance {instance.id} evaluate on metric {self.name}")
 
         return values
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "class_module": self.__class__.__module__,
+            "class_name": self.__class__.__name__,
+        }
 
     @abstractmethod
     def _eval_logic(

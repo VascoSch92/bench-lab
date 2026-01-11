@@ -1,17 +1,17 @@
 import copy
-import json
-from abc import ABC, abstractmethod
-from pathlib import Path
+from abc import abstractmethod
 from typing import Any
-from typing import Generic, final, ClassVar
+from typing import final, ClassVar
 
 from benchlab._core._benchmark._execution import BenchmarkExec
 from benchlab._core._logging import get_logger
 from benchlab._core._evaluation._metrics import Metric
 from benchlab._core._time import _timed_exec
 from benchlab._core._types import BenchmarkCallable, InstanceType
+from benchlab._core._benchmark._artifacts import BenchmarkArtifact, ArtifactType
 
-# TODO: add token usage or better usage
+
+# todo: add token usage or better usage
 # todo: check how logger works if we have a logger in our main program
 # todo: update logging to use rich
 # todo: add callback method to stop retrying
@@ -19,7 +19,9 @@ from benchlab._core._types import BenchmarkCallable, InstanceType
 __all__ = ["Benchmark"]
 
 
-class Benchmark(ABC, Generic[InstanceType]):
+class Benchmark(
+    BenchmarkArtifact[InstanceType],
+):
     """Class to run benchmarks"""
 
     """Map of the metrics for the benchmark"""
@@ -39,7 +41,7 @@ class Benchmark(ABC, Generic[InstanceType]):
 
         self.name = name
 
-        self._metrics: list[Metric] = self._register_metric(metrics or [])
+        self.metrics: list[Metric] = self._register_metric(metrics or [])
 
         if n_instance is not None and n_instance <= 0:
             raise ValueError(
@@ -84,17 +86,30 @@ class Benchmark(ABC, Generic[InstanceType]):
             metrics.append(metric_cls(logger=self.logger))
         return metrics
 
-    def metadata(self) -> dict[str, Any]:
-        metadata: dict[str, Any] = {"name": self.name}
+    @staticmethod
+    def _artifact_type() -> ArtifactType:
+        return ArtifactType.BENCHMARK
 
+    def _artifact(self) -> dict[str, Any]:
+        artifact: dict[str, Any] = {}
+
+        artifact["spec"] = {}
+        artifact["spec"]["name"] = self.name
         if self.n_instance is not None:
-            metadata["n_instance"] = self.n_instance
+            artifact["spec"]["n_instance"] = self.n_instance
         if self.n_attempts is not None:
-            metadata["n_attempts"] = self.n_attempts
+            artifact["spec"]["n_attempts"] = self.n_attempts
         if self.timeout is not None:
-            metadata["timeout"] = self.timeout
+            artifact["spec"]["timeout"] = self.timeout
 
-        return metadata
+        if self._instansces is not None:
+            artifact["instances"] = [instance.to_dict() for instance in self._instances]
+        else:
+            artifact["instances"] = []
+            
+        artifact["metrics"] = [metric.to_dict() for metric in self.metrics]
+
+        return artifact
 
     @classmethod
     def new(
@@ -197,29 +212,9 @@ class Benchmark(ABC, Generic[InstanceType]):
 
         return BenchmarkExec(
             instances=instances,
-            metrics=self._metrics,
+            metrics=self.metrics,
             logger=self.logger,
-            metadata=self.metadata(),
+            spec=self._artifact(),
         )
 
     async def run_async(self) -> None: ...
-
-    def to_json(self, output_path: Path | str) -> None:
-        output_path = Path(output_path)
-
-        if not output_path.suffix:
-            output_path = output_path.with_suffix(".json")
-
-        if self._instances is None:
-            self._instances = self.load_dataset()
-
-        file = {
-            "metadata": self.metadata(),
-            "instances": [instance.to_dict() for instance in self._instances],
-        }
-        with output_path.open("w") as f:
-            json.dump(file, f, indent=4)
-
-
-class BenchmarkArtifact(ABC):
-    pass

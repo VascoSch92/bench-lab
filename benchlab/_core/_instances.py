@@ -2,10 +2,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
-from benchlab._core._evaluation._stats import MetricStats
 from benchlab._core._types import AnswerType, MetricOutputType
+
+if TYPE_CHECKING:
+    from benchlab._core._evaluation._stats import MetricStats
 
 
 class AttemptStatus(StrEnum):
@@ -52,8 +54,14 @@ class Attempt:
             "_status": self.status,
         }
 
+@dataclass(frozen=True, slots=True)
+class EvaluatedAttempt:
+    _evals: list[MetricOutputType]
+    _stats: MetricStats
 
-@dataclass(slots=True, kw_only=True)
+
+
+@dataclass(slots=True, frozen=True, kw_only=True)
 class Instance(ABC):
     """Instance of a benchmark."""
 
@@ -63,11 +71,11 @@ class Instance(ABC):
     _attempts: list[Attempt] = field(default_factory=list)
     """Attempts produced by the benchmark."""
 
+    _evaluated_attempts: dict[str, EvaluatedAttempt] = field(default_factory=dict)
+    """Map metric name to evaluated attempt."""
+
     _evaluations: dict[str, list[MetricOutputType]] = field(default_factory=dict)
     """Evaluations of attempts. Map metric name to evaluation results."""
-
-    _stats: list[MetricStats] = field(default_factory=list)
-    """Metrics stats produced for this instance."""
 
     @property
     def attempts(self) -> list[Attempt]:
@@ -88,10 +96,6 @@ class Instance(ABC):
     @property
     def evaluations(self) -> MappingProxyType[str, list[MetricOutputType]]:
         return MappingProxyType(self._evaluations)
-
-    @property
-    def stats(self) -> list[MetricStats]:
-        return self._stats
 
     def add_attempt(self, response: AnswerType, runtime: float, status: str) -> None:
         if runtime < 0.0:
@@ -116,7 +120,6 @@ class Instance(ABC):
             "id": self.id,
             "_attempts": [attempt.to_dict() for attempt in self._attempts],
             "_evaluations": self._evaluations,
-            "_metrics": self._stats,
             **self._to_dict(),
         }
 

@@ -1,24 +1,56 @@
-import json
 import logging
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any, Generic, Self
+from typing import Any
 
-from benchlab._core._benchmark._load_utils import get_instances_from_json
 from benchlab._core._evaluation._metrics import _METRIC_TYPE_TO_STATS
 from benchlab._core._evaluation._stats import MetricStats
 from benchlab._core._types import InstanceType
 from benchlab._core._evaluation._metrics import Metric
+from benchlab._core._benchmark._artifacts import BenchmarkArtifact, ArtifactType
+from benchlab._core._benchmark._report import BenchmarkReport
+import copy
+
 
 __all__ = ["BenchmarkEval"]
 
 
 @dataclass(frozen=True, slots=True)
-class BenchmarkEval(Generic[InstanceType]):
-    instances: list[InstanceType]
+class BenchmarkEval(BenchmarkArtifact[InstanceType]):
+    spec: dict[str, Any] = field(default_factory=dict)
+    instances: list[InstanceType] = field(default_factory=list)
     metrics: list[Metric] = field(default_factory=list)
     logger: logging.Logger = field(default_factory=lambda: logging.getLogger("null"))
-    metadata: dict[str, Any] = field(default_factory=dict)
+
+    @staticmethod
+    def _artifact_type() -> ArtifactType:
+        return ArtifactType.EVALUATION
+
+    def _artifact(self) -> dict[str, Any]:
+        artifact: dict[str, Any] = {}
+
+        artifact["spec"] = self.spec.get("spec", {})
+        artifact["instances"] = [instance.to_dict() for instance in self.instances]
+        artifact["metrics"] = [metric.to_dict() for metric in self.metrics]
+
+        return artifact
+
+    def _name_to_type(self) -> dict:
+        return {
+            metric.name : metric.type_
+            for metric in self.metrics
+        }
+    
+    def report(self) -> BenchmarkReport:
+        instances = copy.deepcopy(self.instances)
+        _name_to_type = self._name_to_type()
+
+        for instance in instances:
+            for metric_name, eval in instance.evaluations.items():
+                metric_type = _name_to_type[metric_name]
+                stats_cls = _METRIC_TYPE_TO_STATS[metric_type]
+                stats = stats_cls.from_eval(metric_name=metric_name, values=eval)
+        
+        
 
     def get_results_for(self, metric_name: str) -> MetricStats:
         evals = []
@@ -46,38 +78,6 @@ class BenchmarkEval(Generic[InstanceType]):
     #         table.append(f"{metric_stats.metric_name}: {metric_stats.n_valid_attempts}")
     #
     #     print(table)
-
-    @classmethod
-    def from_json(cls, path: Path | str) -> Self:
-        path = Path(path)
-        with path.open("r") as f:
-            data = json.load(f)
-
-        instances: list[InstanceType] = get_instances_from_json(data["instances"])
-
-        return cls(
-            metadata=data["metadata"],
-            instances=instances,
-        )
-
-    def to_json(self, output_path: Path | str) -> None:
-        output_path = Path(output_path)
-
-        if not output_path.suffix:
-            output_path = output_path.with_suffix(".json")
-
-        file = {
-            "metadata": self.metadata,
-            "instances": [instance.to_dict() for instance in self.instances],
-        }
-        with output_path.open("w") as f:
-            json.dump(file, f, indent=4)
-
-    @classmethod
-    def from_exec(
-        cls,
-    ) -> "BenchmarkEval":
-        return None
 
     def to_csv(self) -> None:
         pass
