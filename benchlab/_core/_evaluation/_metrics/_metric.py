@@ -2,14 +2,14 @@ import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Generic, ClassVar, Final, Type, TYPE_CHECKING, Any
+from typing import Generic, ClassVar, Final, final, Type, TYPE_CHECKING, Any
 
-from benchlab._core._instances import Attempt
 from benchlab._core._evaluation._stats import (
     RegressionMetricStats,
     BooleanMetricStats,
     CategoricalMetricStats,
 )
+from benchlab._core._instance import Attempt
 from benchlab._core._types import MetricOutputType, InstanceType
 
 if TYPE_CHECKING:
@@ -29,6 +29,7 @@ class MetricType(StrEnum):
     """Metrics that produce discrete category labels."""
 
 
+# todo: we can delete that
 _METRIC_TYPE_TO_STATS: Final[dict[MetricType, Type["MetricStats"]]] = {
     MetricType.REGRESSION: RegressionMetricStats,
     MetricType.BOOLEAN: BooleanMetricStats,
@@ -43,20 +44,17 @@ class Metric(ABC, Generic[InstanceType, MetricOutputType]):
     name: ClassVar[str]
     """"Name of the metric"""
 
-    # todo: do we need that?
-    benchmarks: ClassVar[list[str]]
-    """Benchmarks on which the metric can be computed."""
-
     type_: ClassVar[MetricType]
     """Type of the metric."""
 
     logger: logging.Logger = field(default_factory=lambda: logging.getLogger("null"))
     """Logger for the metric."""
 
+    @final
     def evaluate(
         self, instance: InstanceType, attempts: list[Attempt]
     ) -> list[MetricOutputType]:
-        if self.name in instance.stats:
+        if self.name in instance.evaluations:
             self.logger.warning(
                 f"Metric `{self.name}` already evaluated. It will be overwritten."
             )
@@ -81,11 +79,16 @@ class Metric(ABC, Generic[InstanceType, MetricOutputType]):
         self, instance: InstanceType, attempt: Attempt
     ) -> MetricOutputType: ...
 
-    async def evaluate_async(self, instance: InstanceType) -> list[MetricOutputType]:
+    async def evaluate_async(
+        self, instance: InstanceType, attempts: list[Attempt]
+    ) -> list[MetricOutputType]:
         # todo: complete here
         return []
 
-    @abstractmethod
     async def _eval_logic_async(
-        self, instance: InstanceType, attempt: Attempt
-    ) -> MetricOutputType: ...
+        self,
+        instance: InstanceType,
+        attempt: Attempt,
+    ) -> MetricOutputType:
+        """Override this method if you want to provide an async evaluation logic."""
+        raise NotImplementedError("An async logic is not implemented for this metric.")

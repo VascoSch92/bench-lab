@@ -5,7 +5,7 @@ from typing import final, ClassVar
 
 from benchlab._core._benchmark._execution import BenchmarkExec
 from benchlab._core._logging import get_logger
-from benchlab._core._evaluation._metrics import Metric
+from benchlab._core._evaluation._metrics._metric import Metric
 from benchlab._core._time import _timed_exec
 from benchlab._core._types import BenchmarkCallable, InstanceType
 from benchlab._core._benchmark._artifacts import BenchmarkArtifact, ArtifactType
@@ -102,12 +102,12 @@ class Benchmark(
         if self.timeout is not None:
             artifact["spec"]["timeout"] = self.timeout
 
-        if self._instansces is not None:
-            artifact["instances"] = [instance.to_dict() for instance in self._instances]
+        if self._instances is not None:
+            artifact["instances"] = self._instances
         else:
             artifact["instances"] = []
-            
-        artifact["metrics"] = [metric.to_dict() for metric in self.metrics]
+
+        artifact["metrics"] = self.metrics
 
         return artifact
 
@@ -124,15 +124,27 @@ class Benchmark(
     ) -> "Benchmark[Any]":
         match name:
             case "GPQA":
-                from benchlab._benchmarks._gpqa._benchmark import GPQABenchmark
+                from benchlab._library._gpqa._benchmark import GPQABenchmark
 
                 return GPQABenchmark(name=name, metrics=metrics)
             case "JailbreakLLMs":
-                from benchlab._benchmarks._jailbreak_llms._benchmark import (
+                from benchlab._library._jailbreak_llms._benchmark import (
                     JailbreakLLMsBenchmark,
                 )
 
                 return JailbreakLLMsBenchmark(
+                    name=name,
+                    metrics=metrics,
+                    logs_filepath=logs_filepath,
+                    instance_ids=instance_ids,
+                    n_instance=n_instance,
+                    n_attempts=n_attempts,
+                    timeout=timeout,
+                )
+            case "MathQA":
+                from benchlab._library._math_qa._benchmark import MathQABenchmark
+
+                return MathQABenchmark(
                     name=name,
                     metrics=metrics,
                     logs_filepath=logs_filepath,
@@ -182,6 +194,10 @@ class Benchmark(
     ) -> BenchmarkExec:
         self.logger.info(f"Running benchmark {self.name} for {fn.__name__}")
 
+        return_type = fn.__annotations__.get("return", None)
+        if return_type is None:
+            self.logger.warning("No return type detected")
+
         if self._instances is None:
             self._instances = self.load_dataset()
 
@@ -214,7 +230,7 @@ class Benchmark(
             instances=instances,
             metrics=self.metrics,
             logger=self.logger,
-            spec=self._artifact(),
+            spec=self._artifact()["spec"],
         )
 
     async def run_async(self) -> None: ...

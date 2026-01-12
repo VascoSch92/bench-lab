@@ -2,12 +2,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, TYPE_CHECKING
+from typing import Any
 
-from benchlab._core._types import AnswerType, MetricOutputType
-
-if TYPE_CHECKING:
-    from benchlab._core._evaluation._stats import MetricStats
+from benchlab._core._types import AnswerType
 
 
 class AttemptStatus(StrEnum):
@@ -54,12 +51,6 @@ class Attempt:
             "_status": self.status,
         }
 
-@dataclass(frozen=True, slots=True)
-class EvaluatedAttempt:
-    _evals: list[MetricOutputType]
-    _stats: MetricStats
-
-
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class Instance(ABC):
@@ -71,11 +62,8 @@ class Instance(ABC):
     _attempts: list[Attempt] = field(default_factory=list)
     """Attempts produced by the benchmark."""
 
-    _evaluated_attempts: dict[str, EvaluatedAttempt] = field(default_factory=dict)
-    """Map metric name to evaluated attempt."""
-
-    _evaluations: dict[str, list[MetricOutputType]] = field(default_factory=dict)
-    """Evaluations of attempts. Map metric name to evaluation results."""
+    _evaluated_attempts: dict[str, list[Any]] = field(default_factory=dict)
+    """Map metric name to evaluated attempts."""
 
     @property
     def attempts(self) -> list[Attempt]:
@@ -94,8 +82,8 @@ class Instance(ABC):
         return [attempt.status for attempt in self.attempts]
 
     @property
-    def evaluations(self) -> MappingProxyType[str, list[MetricOutputType]]:
-        return MappingProxyType(self._evaluations)
+    def evaluations(self) -> MappingProxyType[str, list[Any]]:
+        return MappingProxyType(self._evaluated_attempts)
 
     def add_attempt(self, response: AnswerType, runtime: float, status: str) -> None:
         if runtime < 0.0:
@@ -106,8 +94,8 @@ class Instance(ABC):
         attempt = Attempt.new(response, runtime, AttemptStatus(status))
         self._attempts.append(attempt)
 
-    def add_eval(self, metric_name: str, value: Any) -> None:
-        self._evaluations[metric_name] = value
+    def add_eval(self, metric_name: str, evals: list[Any]) -> None:
+        self._evaluated_attempts[metric_name] = evals
 
     @property
     @abstractmethod
@@ -119,7 +107,7 @@ class Instance(ABC):
             "class_name": self.__class__.__name__,
             "id": self.id,
             "_attempts": [attempt.to_dict() for attempt in self._attempts],
-            "_evaluations": self._evaluations,
+            "_evaluated_attempts": self._evaluated_attempts,
             **self._to_dict(),
         }
 

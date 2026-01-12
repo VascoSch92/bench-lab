@@ -2,14 +2,11 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from benchlab._core._evaluation._metrics import _METRIC_TYPE_TO_STATS
-from benchlab._core._evaluation._stats import MetricStats
-from benchlab._core._types import InstanceType
-from benchlab._core._evaluation._metrics import Metric
 from benchlab._core._benchmark._artifacts import BenchmarkArtifact, ArtifactType
 from benchlab._core._benchmark._report import BenchmarkReport
-import copy
-
+from benchlab._core._evaluation._aggregator import BooleanAggregator
+from benchlab._core._evaluation._metrics._metric import Metric, MetricType
+from benchlab._core._types import InstanceType
 
 __all__ = ["BenchmarkEval"]
 
@@ -26,58 +23,32 @@ class BenchmarkEval(BenchmarkArtifact[InstanceType]):
         return ArtifactType.EVALUATION
 
     def _artifact(self) -> dict[str, Any]:
-        artifact: dict[str, Any] = {}
-
-        artifact["spec"] = self.spec.get("spec", {})
-        artifact["instances"] = [instance.to_dict() for instance in self.instances]
-        artifact["metrics"] = [metric.to_dict() for metric in self.metrics]
-
-        return artifact
-
-    def _name_to_type(self) -> dict:
         return {
-            metric.name : metric.type_
-            for metric in self.metrics
+            "spec": self.spec,
+            "instances": self.instances,
+            "metrics": self.metrics,
         }
-    
-    def report(self) -> BenchmarkReport:
-        instances = copy.deepcopy(self.instances)
-        _name_to_type = self._name_to_type()
 
-        for instance in instances:
-            for metric_name, eval in instance.evaluations.items():
-                metric_type = _name_to_type[metric_name]
-                stats_cls = _METRIC_TYPE_TO_STATS[metric_type]
-                stats = stats_cls.from_eval(metric_name=metric_name, values=eval)
-        
-        
+    def report(self) -> "BenchmarkReport":
+        agg_map: dict[str, Any] = {}
+        for metric in self.metrics:
+            metric_name = metric.name
+            metric_type = metric.type_
+            match metric_type:
+                case MetricType.BOOLEAN:
+                    agg_cls = BooleanAggregator
+                case _:
+                    raise RuntimeError
 
-    def get_results_for(self, metric_name: str) -> MetricStats:
-        evals = []
-        for instance in self.instances:
-            evals.extend(instance.evaluations[metric_name])
+            agg = agg_cls.from_stats(
+                metric_name,
+                [instance.evaluations[metric_name] for instance in self.instances],
+            )
+            agg_map[metric_name] = agg
 
-        metric_type = [m.type_ for m in self.metrics if m.name == metric_name][0]
-        stats = _METRIC_TYPE_TO_STATS[metric_type].from_eval(
-            metric_name=metric_name, values=evals
+        return BenchmarkReport(
+            spec=self.spec,
+            instances=self.instances,
+            metrics=self.metrics,
+            logger=self.logger,
         )
-        return stats
-
-    # def display(self) -> None:
-    #     if not self.metrics and not self.instances:
-    #         return None
-    #
-    #     aggregate_metrics: list[MetricStats] = []
-    #     for metric in self.metrics:
-    #         values = [instance.stats[metric.name] for instance in self.instances]
-    #         agg_metric = MetricStats.aggregate(stats=values)
-    #         aggregate_metrics.append(agg_metric)
-    #
-    #     table = []
-    #     for metric_stats in aggregate_metrics:
-    #         table.append(f"{metric_stats.metric_name}: {metric_stats.n_valid_attempts}")
-    #
-    #     print(table)
-
-    def to_csv(self) -> None:
-        pass

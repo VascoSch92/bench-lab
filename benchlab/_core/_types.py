@@ -1,7 +1,7 @@
 from typing import TypeAlias, Protocol, runtime_checkable, Any, TypeVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from benchlab._core._instances import Instance
+    from benchlab._core._instance import Instance
     from benchlab._core._evaluation._stats import BooleanMetricStats
 
 

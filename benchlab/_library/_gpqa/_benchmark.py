@@ -2,7 +2,7 @@ import os
 from typing import final
 
 from benchlab._core._benchmark._benchmark import Benchmark
-from benchlab._benchmarks._gpqa._instances import GPQAInstance
+from benchlab._library._gpqa._instances import GPQAInstance
 
 
 class GPQABenchmark(Benchmark[GPQAInstance]):

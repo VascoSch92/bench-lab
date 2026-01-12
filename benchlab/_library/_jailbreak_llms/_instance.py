@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from benchlab._core._instances import Instance
+from benchlab._core._instance import Instance
 from benchlab._core._types import AnswerType
 
 

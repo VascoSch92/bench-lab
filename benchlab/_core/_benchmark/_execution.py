@@ -5,7 +5,7 @@ from typing import Any
 
 from benchlab._core._benchmark._evaluation import BenchmarkEval
 from benchlab._core._types import InstanceType
-from benchlab._core._evaluation._metrics import Metric
+from benchlab._core._evaluation._metrics._metric import Metric
 from benchlab._core._benchmark._artifacts import BenchmarkArtifact, ArtifactType
 
 
@@ -24,13 +24,14 @@ class BenchmarkExec(BenchmarkArtifact[InstanceType]):
         return ArtifactType.EXECUTION
 
     def _artifact(self) -> dict[str, Any]:
-        artifact: dict[str, Any] = {}
+        return {"spec": self.spec, "instances": self.instances, "metrics": self.metrics}
 
-        artifact["spec"] = self.spec.get("spec", {})
-        artifact["instances"] = [instance.to_dict() for instance in self.instances]
-        artifact["metrics"] = [metric.to_dict() for metric in self.metrics]
+    def add_metric(self, metric: Metric) -> None:
+        if metric in self.metrics:
+            raise ValueError(f"Metric {metric} is already present.")
 
-        return artifact
+        self.metrics.append(metric)
+        self.logger.info(f"Metric {metric.name} added successfully.")
 
     def evaluate(self) -> BenchmarkEval:
         instances = copy.deepcopy(self.instances)
@@ -38,8 +39,7 @@ class BenchmarkExec(BenchmarkArtifact[InstanceType]):
         for metric in self.metrics:
             for instance in instances:
                 evals = metric.evaluate(instance=instance, attempts=instance.attempts)
-                # from here we can retrieve the metric type and compute directly the metric for the eval :-) 
-                instance.add_eval(metric_name=metric.name, value=evals)
+                instance.add_eval(metric_name=metric.name, evals=evals)
 
         return BenchmarkEval(
             spec=self.spec,
@@ -47,6 +47,3 @@ class BenchmarkExec(BenchmarkArtifact[InstanceType]):
             logger=self.logger,
             metrics=self.metrics,
         )
-
-    async def evaluate_async(self) -> BenchmarkEval:
-        pass

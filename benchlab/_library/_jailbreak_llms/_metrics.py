@@ -2,9 +2,9 @@ from dataclasses import dataclass
 from functools import cache
 from typing import ClassVar, final, Final
 
-from benchlab._benchmarks._jailbreak_llms._instances import JailbreakLLMsInstance
-from benchlab._core._instances import Attempt
-from benchlab._core._evaluation._metrics import Metric, MetricType
+from benchlab._library._jailbreak_llms._instance import JailbreakLLMsInstance
+from benchlab._core._instance import Attempt
+from benchlab._core._evaluation._metrics._metric import Metric, MetricType
 from benchlab._core._types import BooleanOutputType
 
 # fmt: off
