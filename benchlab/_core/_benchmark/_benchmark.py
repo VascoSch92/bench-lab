@@ -1,15 +1,16 @@
 import copy
+import importlib
+import re
 from abc import abstractmethod
 from typing import Any
 from typing import final, ClassVar
 
+from benchlab._core._benchmark._artifacts import BenchmarkArtifact, ArtifactType
 from benchlab._core._benchmark._execution import BenchmarkExec
-from benchlab._core._logging import get_logger
 from benchlab._core._evaluation._metrics._metric import Metric
+from benchlab._core._logging import get_logger
 from benchlab._core._time import _timed_exec
 from benchlab._core._types import BenchmarkCallable, InstanceType
-from benchlab._core._benchmark._artifacts import BenchmarkArtifact, ArtifactType
-
 
 # todo: add token usage or better usage
 # todo: check how logger works if we have a logger in our main program
@@ -30,7 +31,8 @@ class Benchmark(
     def __init__(
         self,
         name: str,
-        metrics: list[str] | None = None,
+        instances: list[InstanceType] | None = None,
+        metrics: list[type[Metric]] | None = None,
         instance_ids: list[str] | None = None,
         n_instance: int | None = None,
         n_attempts: int = 1,
@@ -65,36 +67,75 @@ class Benchmark(
             )
         self.timeout = timeout
 
-        self._instances: list[InstanceType] | None = None
+        self.instances = instances
 
-    def _register_metric(self, metric_names: list[str]) -> list[Metric]:
-        if len(metric_names) != len(set(metric_names)):
-            raise ValueError(
-                "Duplicated metric names detected. Metric names must be unique."
+    def _register_metric(self, metrics: list[type[Metric]]) -> list[Metric]:
+        return [metric_cls(self.logger) for metric_cls in metrics]
+
+    @classmethod
+    def new(cls, instances: list[InstanceType], **kwargs) -> "Benchmark[Any]":
+        cls._check_consistency_instances(instances)
+        return cls(instances=instances, **kwargs)
+
+    @staticmethod
+    def _check_consistency_instances(instances: list[InstanceType]) -> None:
+        if not instances:
+            return None
+
+        first_type = type(instances[0])
+        if all(type(i) is first_type for i in instances):
+            raise ValueError("All instances must have the same type.")
+
+    @classmethod
+    def from_library(
+        cls, name: str, metric_names: list[str], **kwargs
+    ) -> "Benchmark[Any]":
+        # convert from camel case to snake case
+        snake_name = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name).lower()
+
+        module_path = f"benchlab._library._{snake_name}._benchmark"
+        class_name = f"{name}Benchmark"
+
+        try:
+            module = importlib.import_module(module_path)
+            benchmark_cls = getattr(module, class_name)
+
+            metric_cls = cls._convert_metric_names_to_cls(
+                benchmark_cls, metric_names, name
             )
 
-        metrics: list[Metric] = []
+            return benchmark_cls(name=name, metrics=metric_cls, **kwargs)
+        except (ImportError, AttributeError) as e:
+            raise ImportError(
+                f"Could not find benchmark `{name}`. "
+                f"Check naming conventions. Error: {e}"
+            )
+
+    @staticmethod
+    def _convert_metric_names_to_cls(
+        benchmark_cls: type["Benchmark"], metric_names, name
+    ) -> list[type[Metric]]:
+        if len(metric_names) != len(set(metric_names)):
+            raise ValueError("Duplicated metrics. Metrics must be unique.")
+        metric_cls = []
         for metric_name in metric_names:
-            metric_cls = type(self)._METRICS.get(metric_name, None)
-
-            if metric_cls is None:
+            if metric_name not in benchmark_cls._METRICS:
                 raise ValueError(
-                    f"Metric `{metric_name}` is not supported by benchmark `{self.name}`.\n"
-                    f"Available metrics: {sorted(type(self)._METRICS.keys())}"
+                    f"Metric `{metric_name}` is not supported by benchmark `{name}`.\n"
+                    f"Available metrics: {sorted(benchmark_cls._METRICS.keys())}"
                 )
-
-            metrics.append(metric_cls(logger=self.logger))
-        return metrics
+            metric_cls.append(benchmark_cls._METRICS[metric_name])
+        return metric_cls
 
     @staticmethod
     def _artifact_type() -> ArtifactType:
         return ArtifactType.BENCHMARK
 
     def _artifact(self) -> dict[str, Any]:
-        artifact: dict[str, Any] = {}
+        artifact: dict[str, Any] = {"spec": {}}
 
-        artifact["spec"] = {}
         artifact["spec"]["name"] = self.name
+        artifact["spec"]["is_from_library"] = "library" in self.__class__.__module__
         if self.n_instance is not None:
             artifact["spec"]["n_instance"] = self.n_instance
         if self.n_attempts is not None:
@@ -102,8 +143,8 @@ class Benchmark(
         if self.timeout is not None:
             artifact["spec"]["timeout"] = self.timeout
 
-        if self._instances is not None:
-            artifact["instances"] = self._instances
+        if self.instances is not None:
+            artifact["instances"] = self.instances
         else:
             artifact["instances"] = []
 
@@ -111,67 +152,19 @@ class Benchmark(
 
         return artifact
 
-    @classmethod
-    def new(
-        cls,
-        name: str,
-        metrics: list[str] | None = None,
-        instance_ids: list[str] | None = None,
-        n_instance: int | None = None,
-        n_attempts: int = 1,
-        timeout: float | None = None,
-        logs_filepath: str | None = None,
-    ) -> "Benchmark[Any]":
-        match name:
-            case "GPQA":
-                from benchlab._library._gpqa._benchmark import GPQABenchmark
-
-                return GPQABenchmark(name=name, metrics=metrics)
-            case "JailbreakLLMs":
-                from benchlab._library._jailbreak_llms._benchmark import (
-                    JailbreakLLMsBenchmark,
-                )
-
-                return JailbreakLLMsBenchmark(
-                    name=name,
-                    metrics=metrics,
-                    logs_filepath=logs_filepath,
-                    instance_ids=instance_ids,
-                    n_instance=n_instance,
-                    n_attempts=n_attempts,
-                    timeout=timeout,
-                )
-            case "MathQA":
-                from benchlab._library._math_qa._benchmark import MathQABenchmark
-
-                return MathQABenchmark(
-                    name=name,
-                    metrics=metrics,
-                    logs_filepath=logs_filepath,
-                    instance_ids=instance_ids,
-                    n_instance=n_instance,
-                    n_attempts=n_attempts,
-                    timeout=timeout,
-                )
-            case _:
-                raise ValueError(
-                    f"`{name}` is not a valid benchmark name.\n"
-                    f"Visit XXX to see implemented benchmark."
-                )
-
     @final
     def load_dataset(self) -> list[InstanceType]:
-        if self._instances is None:
+        if self.instances is None:
             self.logger.info("Loading dataset from source")
 
             dataset = self._load_dataset()
-            self._instances = self._filter_instances(dataset)
+            self.instances = self._filter_instances(dataset)
 
-            self.logger.info(f"Loaded {len(self._instances)} instances")
-            return self._instances
+            self.logger.info(f"Loaded {len(self.instances)} instances")
+            return self.instances
 
         self.logger.info("Dataset retrieved from cache")
-        return self._instances
+        return self.instances
 
     def _filter_instances(self, dataset: list[InstanceType]) -> list[InstanceType]:
         """Private method to filter a dataset"""
@@ -198,11 +191,11 @@ class Benchmark(
         if return_type is None:
             self.logger.warning("No return type detected")
 
-        if self._instances is None:
-            self._instances = self.load_dataset()
+        if self.instances is None:
+            self.instances = self.load_dataset()
 
         # deepcopy instances to not change the ones owned by the benchmark
-        instances = copy.deepcopy(self._instances)
+        instances = copy.deepcopy(self.instances)
 
         for instance in instances:
             for attempt_id in range(1, self.n_attempts + 1):

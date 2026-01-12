@@ -1,4 +1,4 @@
-from benchlab._core import Benchmark
+from benchlab import Benchmark
 
 
 def mock_model(instance, s: str) -> str:
@@ -6,14 +6,15 @@ def mock_model(instance, s: str) -> str:
 
 
 def main():
-    benchmark = Benchmark.new(
+    benchmark = Benchmark.from_library(
         name="MathQA",
-        metrics=["exact_match"],
+        metric_names=["exact_match"],
         timeout=None,
         n_instance=5,
         n_attempts=1,
     )
     benchmark.load_dataset()
+    benchmark.to_json()
     bench_exec = benchmark.run(mock_model, args={"s": "ciao"})
     bench_eval = bench_exec.evaluate()
     bench_eval.report()

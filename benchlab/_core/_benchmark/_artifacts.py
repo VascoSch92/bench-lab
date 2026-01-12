@@ -142,7 +142,7 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
 
         class_module: str | None = None
         class_name: str | None = None
-        instance_cls: InstanceType | None = None
+        instance_cls: type[InstanceType] | None = None
         for instance in json_instances:
             instance_class_module = instance.pop("class_module")
             instance_class_name = instance.pop("class_name")
@@ -185,15 +185,19 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
                     _attempts=[],
                     _evaluated_attempts={},
                 )
-
+        is_from_library = spec.pop("is_from_library", False)
+        if is_from_library:
+            return Benchmark.from_library(
+                name=spec.pop("name"),
+                instances=instances,
+                metric_names=[m.name for m in metrics],
+                **spec,
+            )
         return Benchmark.new(
-            name=spec["name"],
-            metrics=[m.name for m in metrics],
-            instance_ids=spec.get("instance_ids", None),
-            n_instance=spec.get("n_instance", None),
-            n_attempts=spec.get("n_attempts", 1),
-            timeout=spec.get("timeout", None),
-            logs_filepath=spec.get("logs_filepath", None),
+            name=spec.pop("name"),
+            instances=instances,
+            metric_names=metrics,
+            **spec,
         )
 
     @staticmethod
