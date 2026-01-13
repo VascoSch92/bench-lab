@@ -14,7 +14,8 @@ def main():
         n_attempts=1,
     )
     benchmark.load_dataset()
-    benchmark.to_json()
+    benchmark.to_json("my_json.json")
+    bench = Benchmark.from_json("my_json.json")
     bench_exec = benchmark.run(mock_model, args={"s": "ciao"})
     bench_eval = bench_exec.evaluate()
     bench_eval.report()

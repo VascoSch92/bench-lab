@@ -2,8 +2,9 @@ import logging
 from dataclasses import dataclass, field
 from typing import Any
 
-from benchlab._core._benchmark._artifacts import BenchmarkArtifact, ArtifactType
+from benchlab._core._benchmark._artifacts import BenchmarkArtifact
 from benchlab._core._benchmark._report import BenchmarkReport
+from benchlab._core._benchmark._spec import Spec
 from benchlab._core._evaluation._aggregator import BooleanAggregator
 from benchlab._core._evaluation._metrics._metric import Metric, MetricType
 from benchlab._core._types import InstanceType
@@ -13,23 +14,12 @@ __all__ = ["BenchmarkEval"]
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkEval(BenchmarkArtifact[InstanceType]):
-    spec: dict[str, Any] = field(default_factory=dict)
+    spec: Spec = field(default_factory=Spec.new)
     instances: list[InstanceType] = field(default_factory=list)
     metrics: list[Metric] = field(default_factory=list)
     logger: logging.Logger = field(default_factory=lambda: logging.getLogger("null"))
 
-    @staticmethod
-    def _artifact_type() -> ArtifactType:
-        return ArtifactType.EVALUATION
-
-    def _artifact(self) -> dict[str, Any]:
-        return {
-            "spec": self.spec,
-            "instances": self.instances,
-            "metrics": self.metrics,
-        }
-
-    def report(self) -> "BenchmarkReport":
+    def report(self) -> "BenchmarkReport[InstanceType]":
         agg_map: dict[str, Any] = {}
         for metric in self.metrics:
             metric_name = metric.name

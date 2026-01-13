@@ -1,15 +1,16 @@
 import csv
 import importlib
 import json
-from abc import ABC, abstractmethod
-from dataclasses import replace
+from abc import ABC
+from dataclasses import replace, dataclass
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Generic, TYPE_CHECKING, Union
+from typing import Any, Generic, TYPE_CHECKING, Union, Self
 
 from benchlab._core._evaluation._metrics._metric import Metric
 from benchlab._core._types import InstanceType
+from benchlab._core._benchmark._spec import Spec
 
 if TYPE_CHECKING:
     from benchlab._core._benchmark._benchmark import Benchmark
@@ -17,25 +18,36 @@ if TYPE_CHECKING:
     from benchlab._core._benchmark._evaluation import BenchmarkEval
     from benchlab._core._benchmark._report import BenchmarkReport
 
-__all__ = ["BenchmarkArtifact", "ArtifactType"]
-
-# todo: json schema to validate the given json and or spec?
+__all__ = ["BenchmarkArtifact"]
 
 
 class ArtifactType(StrEnum):
     """Type of the artifact."""
 
-    BENCHMARK = "benchmark"
+    BENCHMARK = "Benchmark"
     """Artifact for the class `Benchmark`."""
 
-    EXECUTION = "execution"
+    EXECUTION = "BenchmarkExec"
     """Artifact for the class `BenchmarkExec`."""
 
-    EVALUATION = "evaluation"
+    EVALUATION = "BenchmarkEval"
     """Artifact for the class `BenchmarkEval`."""
 
-    REPORT = "report"
+    REPORT = "BenchmarkReport"
     """Artifact for the class `BenchmarkReport`."""
+
+    @classmethod
+    def from_string(cls, input_: str):
+        match input_:
+            case (
+                ArtifactType.BENCHMARK
+                | ArtifactType.EXECUTION
+                | ArtifactType.EVALUATION
+                | ArtifactType.REPORT
+            ):
+                return ArtifactType(input_)
+            case _:
+                raise RuntimeError(f"Unexpected artifact type {input_}")
 
     @property
     def _rank(self) -> dict[str, int]:
@@ -52,88 +64,77 @@ class ArtifactType(StrEnum):
         return self._rank[self] < other._rank[other]
 
 
-class BenchmarkArtifact(ABC, Generic[InstanceType]):
-    @staticmethod
-    @abstractmethod
-    def _artifact_type() -> ArtifactType: ...
+@dataclass(frozen=True)
+class Artifact(Generic[InstanceType]):
+    """
+    Represents a serialized snapshot of a benchmark, including its configuration and data.
 
-    @abstractmethod
-    def _artifact(self) -> dict[str, Any]: ...
+    An Artifact serves as the "container" that bundles together the benchmark's
+    operational specifications, the specific instances (tasks) it contains, the
+    metrics used for evaluation, and the metadata required for dynamic reconstruction.
+    """
+
+    metadata: dict[str, str]
+    """
+    A dictionary containing essential class information. Must include 'class_name' 
+    and 'class_module' to allow for dynamic re-instantiation of the benchmark.
+    """
+
+    spec: Spec
+    """Instance of :class:`Spec` containing the execution parameters."""
+
+    instances: list[InstanceType]
+    """A list of instances of type `InstanceType`. All items must be of the exact same class."""
+
+    metrics: list[Metric]
+    """ list of :class:`Metric` objects"""
+
+    def __post_init__(self):
+        if "class_name" not in self.metadata or "class_module" not in self.metadata:
+            # todo: implement our excpetion ArtifactCorrupted
+            raise ValueError(
+                "artifact metadata must contain 'class_name' and 'class_module'"
+            )
+        # todo: check also here that all the instances have the same class :-)
+
+    @property
+    def type_(self) -> ArtifactType:
+        class_name, class_module = (
+            self.metadata["class_name"],
+            self.metadata["class_module"],
+        )
+        if class_name.endswith("Benchmark") and "._library" in class_module:
+            return ArtifactType.BENCHMARK
+        return ArtifactType.from_string(class_name)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "metadata": self.metadata,
+            "spec": self.spec.to_dict(),
+            "instances": [instance.to_dict() for instance in self.instances],
+            "metrics": [metric.to_dict() for metric in self.metrics],
+        }
 
     @classmethod
-    def from_json(
-        cls,
-        path: Path | str,
-    ) -> Union[
-        "Benchmark[InstanceType]",
-        "BenchmarkExec[InstanceType]",
-        "BenchmarkEval[InstanceType]",
-        "BenchmarkReport[InstanceType]",
-    ]:
+    def from_json(cls, path: str | Path) -> Self:
         path = Path(path)
         with path.open("r") as f:
-            artifact = json.load(f)
+            json_artifact = json.load(f)
 
-        artifact_type = cls._get_artifact_type_from_json(artifact.pop("type", None))
-        if artifact_type < cls._artifact_type():
-            # todo: the error msg is not so clear :-)
-            raise ValueError(
-                f"It is not possible to instantiate an artifact type {cls._artifact_type()} with \n"
-                "an artifact of type {artifact_type}."
-            )
+        # todo: check that we have good number of keys.
+        # todo: they should be exactly 4
+        spec = Spec(**json_artifact["spec"])
+        instances = cls._get_instances_from_json(json_artifact["instances"])
+        metrics = cls._get_metrics_from_json(json_artifact["metrics"])
 
-        spec_artifact = artifact.pop("spec", {})
+        return cls(
+            metadata=json_artifact["metadata"],
+            spec=spec,
+            instances=instances,
+            metrics=metrics,
+        )
 
-        instance_artifact = artifact.pop("instances", [])
-        instances: list[InstanceType] = cls._get_instances_from_json(instance_artifact)
-
-        metric_artifact = artifact.pop("metrics", [])
-        metrics: list[Metric] = cls._get_metrics_from_json(metric_artifact)
-
-        match cls._artifact_type():
-            case ArtifactType.BENCHMARK:
-                return cls._instantiate_benchmark(
-                    instances=instances, metrics=metrics, spec=spec_artifact
-                )
-            case ArtifactType.EXECUTION:
-                return cls._instantiate_benchmark_exec(
-                    instances=instances, metrics=metrics, spec=spec_artifact
-                )
-            case ArtifactType.EVALUATION:
-                return cls._instantiate_benchmark_eval(
-                    instances=instances, metrics=metrics, spec=spec_artifact
-                )
-            case ArtifactType.REPORT:
-                return cls._instantiate_benchmark_report(
-                    instances=instances, metrics=metrics, spec=spec_artifact
-                )
-            case _:
-                raise RuntimeError(f"Unexpected artifact type {cls._artifact_type()}")
-
-    @staticmethod
-    def _get_artifact_type_from_json(artifact_type: str | None) -> ArtifactType:
-        if artifact_type is None:
-            raise ValueError("Artifact corrupted. Indeed, artifact type is `None`.")
-        return ArtifactType(artifact_type)
-
-    @staticmethod
-    def _get_metrics_from_json(json_metrics: list[dict[str, Any]]) -> list[Metric]:
-        metrics = []
-
-        for metric in json_metrics:
-            metric_class_module = metric.pop("class_module")
-            metric_class_name = metric.pop("class_name")
-
-            module = importlib.import_module(metric_class_module)
-            metric_cls = getattr(module, metric_class_name, None)
-
-            if metric_cls is None:
-                # todo: better error message
-                raise ValueError
-            metrics.append(metric_cls())
-
-        return metrics
-
+    # todo: change exception in ArtifactCorruptedException
     @staticmethod
     def _get_instances_from_json(
         json_instances: list[dict[str, Any]],
@@ -171,10 +172,93 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
         return instances
 
     @staticmethod
+    def _get_metrics_from_json(json_metrics: list[dict[str, Any]]) -> list[Metric]:
+        metrics = []
+
+        for metric in json_metrics:
+            metric_class_module = metric.pop("class_module")
+            metric_class_name = metric.pop("class_name")
+
+            module = importlib.import_module(metric_class_module)
+            metric_cls = getattr(module, metric_class_name, None)
+
+            if metric_cls is None:
+                # todo: better error message
+                raise ValueError
+            metrics.append(metric_cls())
+
+        return metrics
+
+
+class BenchmarkArtifact(ABC, Generic[InstanceType]):
+    def _artifact(self) -> Artifact[InstanceType]:
+        return Artifact(
+            metadata={
+                "class_name": self.__class__.__name__,
+                "class_module": self.__class__.__module__,
+            },
+            spec=getattr(self, "spec", Spec.new()),
+            instances=getattr(self, "instances", []),
+            metrics=getattr(self, "metrics", []),
+        )
+
+    @classmethod
+    def from_json(
+        cls,
+        path: Path | str,
+    ) -> Union[
+        "Benchmark[InstanceType]",
+        "BenchmarkExec[InstanceType]",
+        "BenchmarkEval[InstanceType]",
+        "BenchmarkReport[InstanceType]",
+    ]:
+        artifact: Artifact = Artifact.from_json(path)
+
+        artifact_type = artifact.type_
+        cls_type = ArtifactType.from_string(cls.__name__)
+        if artifact_type < cls_type:
+            # todo: the error msg is not so clear :-)
+            raise ValueError(
+                f"It is not possible to instantiate an artifact type {cls_type} with \n"
+                f"an artifact of type {artifact_type}."
+            )
+
+        match cls_type:
+            case ArtifactType.BENCHMARK:
+                from_library = "._library" in artifact.metadata["class_module"]
+                return cls._instantiate_benchmark(
+                    instances=artifact.instances,
+                    metrics=artifact.metrics,
+                    spec=artifact.spec,
+                    from_library=from_library,
+                )
+            case ArtifactType.EXECUTION:
+                return cls._instantiate_benchmark_exec(
+                    instances=artifact.instances,
+                    metrics=artifact.metrics,
+                    spec=artifact.spec,
+                )
+            case ArtifactType.EVALUATION:
+                return cls._instantiate_benchmark_eval(
+                    instances=artifact.instances,
+                    metrics=artifact.metrics,
+                    spec=artifact.spec,
+                )
+            case ArtifactType.REPORT:
+                return cls._instantiate_benchmark_report(
+                    instances=artifact.instances,
+                    metrics=artifact.metrics,
+                    spec=artifact.spec,
+                )
+            case _:
+                raise RuntimeError(f"Unexpected artifact type {cls_type}")
+
+    @staticmethod
     def _instantiate_benchmark(
         instances: list[InstanceType],
         metrics: list[Metric],
-        spec: dict[str, Any],
+        spec: Spec,
+        from_library: bool,
     ) -> "Benchmark[InstanceType]":
         from benchlab._core._benchmark._benchmark import Benchmark
 
@@ -185,26 +269,28 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
                     _attempts=[],
                     _evaluated_attempts={},
                 )
-        is_from_library = spec.pop("is_from_library", False)
-        if is_from_library:
+
+        kwargs = spec.to_dict()
+        kwargs.pop("name")
+        if from_library:
             return Benchmark.from_library(
-                name=spec.pop("name"),
+                name=spec.name,
                 instances=instances,
                 metric_names=[m.name for m in metrics],
-                **spec,
+                **kwargs,
             )
         return Benchmark.new(
-            name=spec.pop("name"),
+            name=spec.name,
             instances=instances,
             metric_names=metrics,
-            **spec,
+            **kwargs,
         )
 
     @staticmethod
     def _instantiate_benchmark_exec(
         instances: list[InstanceType],
         metrics: list[Metric],
-        spec: dict[str, Any],
+        spec: Spec,
     ) -> "BenchmarkExec[InstanceType]":
         from benchlab._core._benchmark._execution import BenchmarkExec
 
@@ -225,7 +311,7 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
     def _instantiate_benchmark_eval(
         instances: list[InstanceType],
         metrics: list[Metric],
-        spec: dict[str, Any],
+        spec: Spec,
     ) -> "BenchmarkEval[InstanceType]":
         from benchlab._core._benchmark._evaluation import BenchmarkEval
 
@@ -239,7 +325,7 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
     def _instantiate_benchmark_report(
         instances: list[InstanceType],
         metrics: list[Metric],
-        spec: dict[str, Any],
+        spec: Spec,
     ) -> "BenchmarkReport[InstanceType]":
         from benchlab._core._benchmark._report import BenchmarkReport
 
@@ -252,22 +338,16 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
     def to_json(self, output_path: Path | str | None = None) -> None:
         output_path = self._validate_path(output_path=output_path, extension=".json")
 
-        artifact = self._artifact()
-
-        json_artifact = {
-            "spec": artifact["spec"],
-            "instances": [instance.to_dict() for instance in artifact["instances"]],
-            "metrics": [metric.to_dict() for metric in artifact["metrics"]],
-        }
+        artifact_dict = self._artifact().to_dict()
 
         with output_path.open("w") as f:
-            json.dump(json_artifact, f, indent=4)
+            json.dump(artifact_dict, f, indent=4)
 
     def to_csv(self, output_path: Path | str | None = None) -> None:
         output_path = self._validate_path(output_path=output_path, extension=".csv")
 
         artifact = self._artifact()
-        instances: list[InstanceType] = artifact["instances"]
+        instances: list[InstanceType] = artifact.instances
 
         # Base table
         headers: list[str] = ["id", "ground_truth"]
@@ -300,7 +380,7 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
 
     def _validate_path(self, output_path: Path | str | None, extension: str) -> Path:
         if output_path is None:
-            name = self._artifact_type().name.lower()
+            name = self.__class__.__name__.lower()
             uuid = int(datetime.now().strftime("%H%M%S%f")[:8])
             output_path = Path.cwd() / f"{name}_{uuid}"
         else:

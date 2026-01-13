@@ -5,7 +5,8 @@ from abc import abstractmethod
 from typing import Any
 from typing import final, ClassVar
 
-from benchlab._core._benchmark._artifacts import BenchmarkArtifact, ArtifactType
+from benchlab._core._benchmark._spec import Spec
+from benchlab._core._benchmark._artifacts import BenchmarkArtifact
 from benchlab._core._benchmark._execution import BenchmarkExec
 from benchlab._core._evaluation._metrics._metric import Metric
 from benchlab._core._logging import get_logger
@@ -25,8 +26,8 @@ class Benchmark(
 ):
     """Class to run benchmarks"""
 
-    """Map of the metrics for the benchmark"""
     _METRICS: ClassVar[dict[str, type["Metric"]]]
+    """Map of the metrics for the benchmark"""
 
     def __init__(
         self,
@@ -41,33 +42,23 @@ class Benchmark(
     ) -> None:
         self.logger = get_logger(name=__name__, path=logs_filepath, console=True)
 
-        self.name = name
-
+        self.instances = instances
         self.metrics: list[Metric] = self._register_metric(metrics or [])
 
-        if n_instance is not None and n_instance <= 0:
-            raise ValueError(
-                "Argument `n_instance` must be a strictly positive integer, or `None` to select all the instances."
-            )
+        self.spec = Spec(
+            name=name,
+            instance_ids=instance_ids or [],
+            n_instance=n_instance,
+            n_attempts=n_attempts,
+            timeout=timeout,
+            logs_filepath=logs_filepath,
+        )
+
         if n_instance is not None and instance_ids is not None:
             self.logger.warning(
                 "Arguments `n_instance` and `instance_ids` are specified at the same time.\n"
                 "`n_instance` instances will be selected from `instance_ids`."
             )
-        self.instance_ids = instance_ids or []
-        self.n_instance = n_instance
-
-        if n_attempts <= 0:
-            raise ValueError("Argument `n_attempts` must be strictly positive integer.")
-        self.n_attempts = n_attempts  # todo: check that it is positive
-
-        if timeout is not None and timeout <= 0.0:
-            raise ValueError(
-                f"Argument `timeout` must be strictly positive. Got {timeout}"
-            )
-        self.timeout = timeout
-
-        self.instances = instances
 
     def _register_metric(self, metrics: list[type[Metric]]) -> list[Metric]:
         return [metric_cls(self.logger) for metric_cls in metrics]
@@ -83,7 +74,7 @@ class Benchmark(
             return None
 
         first_type = type(instances[0])
-        if all(type(i) is first_type for i in instances):
+        if not all(type(i) is first_type for i in instances):
             raise ValueError("All instances must have the same type.")
 
     @classmethod
@@ -127,31 +118,6 @@ class Benchmark(
             metric_cls.append(benchmark_cls._METRICS[metric_name])
         return metric_cls
 
-    @staticmethod
-    def _artifact_type() -> ArtifactType:
-        return ArtifactType.BENCHMARK
-
-    def _artifact(self) -> dict[str, Any]:
-        artifact: dict[str, Any] = {"spec": {}}
-
-        artifact["spec"]["name"] = self.name
-        artifact["spec"]["is_from_library"] = "library" in self.__class__.__module__
-        if self.n_instance is not None:
-            artifact["spec"]["n_instance"] = self.n_instance
-        if self.n_attempts is not None:
-            artifact["spec"]["n_attempts"] = self.n_attempts
-        if self.timeout is not None:
-            artifact["spec"]["timeout"] = self.timeout
-
-        if self.instances is not None:
-            artifact["instances"] = self.instances
-        else:
-            artifact["instances"] = []
-
-        artifact["metrics"] = self.metrics
-
-        return artifact
-
     @final
     def load_dataset(self) -> list[InstanceType]:
         if self.instances is None:
@@ -169,12 +135,14 @@ class Benchmark(
     def _filter_instances(self, dataset: list[InstanceType]) -> list[InstanceType]:
         """Private method to filter a dataset"""
         filter_dataset = dataset
-        if self.instance_ids:
+        if self.spec.instance_ids:
             filter_dataset = [
-                instance for instance in dataset if instance.id in self.instance_ids
+                instance
+                for instance in dataset
+                if instance.id in self.spec.instance_ids
             ]
-        if self.n_instance is not None:
-            filter_dataset = filter_dataset[: self.n_instance]
+        if self.spec.n_instance is not None:
+            filter_dataset = filter_dataset[: self.spec.n_instance]
         return filter_dataset
 
     @abstractmethod
@@ -185,7 +153,7 @@ class Benchmark(
         fn: BenchmarkCallable,
         args: dict[str, Any] | None = None,
     ) -> BenchmarkExec:
-        self.logger.info(f"Running benchmark {self.name} for {fn.__name__}")
+        self.logger.info(f"Running benchmark {self.spec.name} for {fn.__name__}")
 
         return_type = fn.__annotations__.get("return", None)
         if return_type is None:
@@ -198,8 +166,10 @@ class Benchmark(
         instances = copy.deepcopy(self.instances)
 
         for instance in instances:
-            for attempt_id in range(1, self.n_attempts + 1):
-                timed_exec = _timed_exec(fn, self.timeout, instance, **(args or {}))
+            for attempt_id in range(1, self.spec.n_attempts + 1):
+                timed_exec = _timed_exec(
+                    fn, self.spec.timeout, instance, **(args or {})
+                )
 
                 if timed_exec.is_success():
                     self.logger.info(f"Instance {instance.id} successfull benchmarked")
@@ -223,7 +193,7 @@ class Benchmark(
             instances=instances,
             metrics=self.metrics,
             logger=self.logger,
-            spec=self._artifact()["spec"],
+            spec=self.spec,
         )
 
     async def run_async(self) -> None: ...
