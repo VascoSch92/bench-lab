@@ -7,7 +7,7 @@ from typing import final, ClassVar
 
 from benchlab._core._benchmark._spec import Spec
 from benchlab._core._benchmark._artifacts import BenchmarkArtifact
-from benchlab._core._benchmark._execution import BenchmarkExec
+from benchlab._core._benchmark._states._execution import BenchmarkExec
 from benchlab._core._evaluation._metrics._metric import Metric
 from benchlab._core._logging import get_logger
 from benchlab._core._time import _timed_exec

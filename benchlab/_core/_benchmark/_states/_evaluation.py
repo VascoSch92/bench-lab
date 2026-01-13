@@ -3,9 +3,10 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from benchlab._core._benchmark._artifacts import BenchmarkArtifact
-from benchlab._core._benchmark._report import BenchmarkReport
 from benchlab._core._benchmark._spec import Spec
-from benchlab._core._evaluation._aggregator import BooleanAggregator
+from benchlab._core._benchmark._states._report import BenchmarkReport
+from benchlab._core._evaluation._aggregators._aggregator import Aggregator
+from benchlab._core._evaluation._aggregators._aggregator import BooleanAggregator
 from benchlab._core._evaluation._metrics._metric import Metric, MetricType
 from benchlab._core._types import InstanceType
 
@@ -17,9 +18,15 @@ class BenchmarkEval(BenchmarkArtifact[InstanceType]):
     spec: Spec = field(default_factory=Spec.new)
     instances: list[InstanceType] = field(default_factory=list)
     metrics: list[Metric] = field(default_factory=list)
+    aggregators: list[Aggregator] = field(default_factory=list)
     logger: logging.Logger = field(default_factory=lambda: logging.getLogger("null"))
 
-    def report(self) -> "BenchmarkReport[InstanceType]":
+    def report(self) -> BenchmarkReport[InstanceType]:
+        """
+        for aggregator in self.aggregators:
+            aggregator.aggregate(instances=self.instances)
+        :return:
+        """
         agg_map: dict[str, Any] = {}
         for metric in self.metrics:
             metric_name = metric.name

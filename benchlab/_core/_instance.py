@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
@@ -45,11 +45,7 @@ class Attempt:
         return self._status
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            "_response": self.response,
-            "_runtime": self.runtime,
-            "_status": self.status,
-        }
+        return {field_.name: getattr(self, field_.name) for field_ in fields(self)}
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

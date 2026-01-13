@@ -13,10 +13,10 @@ from benchlab._core._types import InstanceType
 from benchlab._core._benchmark._spec import Spec
 
 if TYPE_CHECKING:
-    from benchlab._core._benchmark._benchmark import Benchmark
-    from benchlab._core._benchmark._execution import BenchmarkExec
-    from benchlab._core._benchmark._evaluation import BenchmarkEval
-    from benchlab._core._benchmark._report import BenchmarkReport
+    from benchlab._core._benchmark._states._benchmark import Benchmark
+    from benchlab._core._benchmark._states._execution import BenchmarkExec
+    from benchlab._core._benchmark._states._evaluation import BenchmarkEval
+    from benchlab._core._benchmark._states._report import BenchmarkReport
 
 __all__ = ["BenchmarkArtifact"]
 
@@ -260,7 +260,7 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
         spec: Spec,
         from_library: bool,
     ) -> "Benchmark[InstanceType]":
-        from benchlab._core._benchmark._benchmark import Benchmark
+        from benchlab._core._benchmark._states._benchmark import Benchmark
 
         for j in range(len(instances)):
             if instances[j].attempts or instances[j].evaluations:
@@ -292,7 +292,7 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
         metrics: list[Metric],
         spec: Spec,
     ) -> "BenchmarkExec[InstanceType]":
-        from benchlab._core._benchmark._execution import BenchmarkExec
+        from benchlab._core._benchmark._states._execution import BenchmarkExec
 
         for j in range(len(instances)):
             if instances[j].evaluations:
@@ -313,7 +313,7 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
         metrics: list[Metric],
         spec: Spec,
     ) -> "BenchmarkEval[InstanceType]":
-        from benchlab._core._benchmark._evaluation import BenchmarkEval
+        from benchlab._core._benchmark._states._evaluation import BenchmarkEval
 
         return BenchmarkEval(
             instances=instances,
@@ -327,7 +327,7 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
         metrics: list[Metric],
         spec: Spec,
     ) -> "BenchmarkReport[InstanceType]":
-        from benchlab._core._benchmark._report import BenchmarkReport
+        from benchlab._core._benchmark._states._report import BenchmarkReport
 
         return BenchmarkReport(
             instances=instances,
