@@ -1,33 +1,47 @@
 from dataclasses import dataclass
-from typing import Any
+from functools import cached_property
 
 from benchlab._core._benchmark._states._base import BaseBenchmark
 from benchlab._core._benchmark._states._report import BenchmarkReport
+from benchlab._core._evaluation._metrics._metric import MetricType, Metric
 from benchlab._core._types import InstanceType
+from benchlab._core._evaluation._aggregators._aggregator import AggregatorType
+import collections
+from typing import DefaultDict
 
 __all__ = ["BenchmarkEval"]
 
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkEval(BaseBenchmark[InstanceType]):
-    def report(self) -> BenchmarkReport[InstanceType]:
-        agg_map: dict[str, Any] = {}
-        for metric in self._metrics:
-            metric_name = metric.name
-            metric_type = metric.type_
-            match metric_type:
-                case _:
-                    raise RuntimeError
+    @cached_property
+    def _metric_type_to_metrics(self) -> DefaultDict[MetricType, list[Metric]]:
+        map_ = collections.defaultdict(list)
+        for metric in self.metrics:
+            map_[metric.type_].append(metric)
+        return map_
 
-            agg = agg_cls.aggregate(
-                metric_name,
-                [instance.evaluations[metric_name] for instance in self._instances],
-            )
-            agg_map[metric_name] = agg
+    def report(self) -> BenchmarkReport[InstanceType]:
+        reports = []
+        for aggregator in self.aggregators:
+            match aggregator.type_:
+                case AggregatorType.RUNTIME:
+                    report = aggregator.aggregate(instances=self._instances)
+                    reports.append(report)
+                case AggregatorType.STATUS:
+                    pass
+                case AggregatorType.BOOLEAN_METRICS:
+                    for metric in self._metric_type_to_metrics[aggregator.type_]:
+                        if metric.type_ == aggregator.type_:
+                            report = aggregator.aggregate(self.instances)
+                            reports.append(report)
+                case _:
+                    raise RuntimeError(f"Unknown aggregator type: {aggregator}")
 
         return BenchmarkReport(
             _spec=self._spec,
             _instances=self._instances,
             _metrics=self._metrics,
+            # _reports=reports,
             logger=self.logger,
         )

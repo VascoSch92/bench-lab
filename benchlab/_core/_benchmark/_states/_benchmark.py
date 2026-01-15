@@ -44,7 +44,7 @@ class Benchmark(BaseBenchmark[InstanceType]):
         logs_filepath: str | None = None,
     ) -> Self:
         logger = get_logger(name=__name__, path=logs_filepath, console=True)
-        instances = cls._check_consistency_instances(instances)
+        instances = cls._check_consistency_instances(instances or [])
         metrics = cls._register_metric(metrics or [], logger=logger)
         spec = Spec(
             name=name,
