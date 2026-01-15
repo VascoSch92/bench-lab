@@ -12,9 +12,6 @@ class MathQABenchmark(Benchmark[MathQAInstance]):
         "exact_match": ExactMatchMetric,
     }
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-
     @final
     def _load_dataset(self) -> list[MathQAInstance]:
         dataset = load_dataset("regisss/math_qa")

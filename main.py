@@ -13,7 +13,7 @@ def main():
         n_instance=5,
         n_attempts=1,
     )
-    benchmark.load_dataset()
+    _ = benchmark.instances
     benchmark.to_json("my_json.json")
     bench = Benchmark.from_json("my_json.json")
     bench_exec = benchmark.run(mock_model, args={"s": "ciao"})

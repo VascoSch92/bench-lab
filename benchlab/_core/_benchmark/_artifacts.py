@@ -1,16 +1,15 @@
 import csv
 import importlib
 import json
-from abc import ABC
 from dataclasses import replace, dataclass
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Generic, TYPE_CHECKING, Union, Self
 
+from benchlab._core._benchmark._spec import Spec
 from benchlab._core._evaluation._metrics._metric import Metric
 from benchlab._core._types import InstanceType
-from benchlab._core._benchmark._spec import Spec
 
 if TYPE_CHECKING:
     from benchlab._core._benchmark._states._benchmark import Benchmark
@@ -190,7 +189,7 @@ class Artifact(Generic[InstanceType]):
         return metrics
 
 
-class BenchmarkArtifact(ABC, Generic[InstanceType]):
+class BenchmarkArtifact(Generic[InstanceType]):
     def _artifact(self) -> Artifact[InstanceType]:
         return Artifact(
             metadata={
@@ -282,7 +281,7 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
         return Benchmark.new(
             name=spec.name,
             instances=instances,
-            metric_names=metrics,
+            metrics=metrics,
             **kwargs,
         )
 
@@ -302,9 +301,9 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
                 )
 
         return BenchmarkExec(
-            spec=spec,
-            instances=instances,
-            metrics=metrics,
+            _spec=spec,
+            _instances=instances,
+            _metrics=metrics,
         )
 
     @staticmethod
@@ -316,9 +315,9 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
         from benchlab._core._benchmark._states._evaluation import BenchmarkEval
 
         return BenchmarkEval(
-            instances=instances,
-            metrics=metrics,
-            spec=spec,
+            _instances=instances,
+            _metrics=metrics,
+            _spec=spec,
         )
 
     @staticmethod
@@ -330,9 +329,9 @@ class BenchmarkArtifact(ABC, Generic[InstanceType]):
         from benchlab._core._benchmark._states._report import BenchmarkReport
 
         return BenchmarkReport(
-            instances=instances,
-            metrics=metrics,
-            spec=spec,
+            _instances=instances,
+            _metrics=metrics,
+            _spec=spec,
         )
 
     def to_json(self, output_path: Path | str | None = None) -> None:
