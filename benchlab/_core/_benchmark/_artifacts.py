@@ -310,7 +310,10 @@ class BenchmarkArtifact(Generic[InstanceType]):
             name=spec.name,
             instances=instances,
             metrics=metrics,
-            **kwargs,
+            n_instance=spec.n_instance,
+            n_attempts=spec.n_attempts,
+            timeout=spec.timeout,
+            logs_filepath=spec.logs_filepath,
         )
 
     @staticmethod

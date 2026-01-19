@@ -1,5 +1,8 @@
 import logging
+from abc import abstractmethod
 from dataclasses import dataclass, field
+
+from rich import console, table
 
 from benchlab._core._benchmark._artifacts import BenchmarkArtifact
 from benchlab._core._benchmark._spec import Spec
@@ -34,6 +37,7 @@ class BaseBenchmark(BenchmarkArtifact[InstanceType]):
 
     def __post_init__(self) -> None:
         self._check_consistency_instances()
+        self._task_specific_checks()
 
     def _check_consistency_instances(self) -> None:
         if not self._instances:
@@ -42,6 +46,9 @@ class BaseBenchmark(BenchmarkArtifact[InstanceType]):
         first_type = type(self._instances[0])
         if not all(type(i) is first_type for i in self._instances):
             raise ValueError("All instances must have the same type.")
+
+    @abstractmethod
+    def _task_specific_checks(self) -> None: ...
 
     @property
     def spec(self) -> Spec:
@@ -58,3 +65,11 @@ class BaseBenchmark(BenchmarkArtifact[InstanceType]):
     @property
     def aggregators(self) -> list[Aggregator]:
         return self._aggregators
+
+    def summary(self) -> None:
+        summary_table = self._generate_summary_table()
+        console_ = console.Console()
+        console_.print(summary_table)
+
+    @abstractmethod
+    def _generate_summary_table(self) -> table.Table: ...

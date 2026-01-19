@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field, fields, replace
 from typing import Self
 from uuid import uuid4
 
@@ -15,6 +15,8 @@ class Spec:
     n_instance: int | None = None
     timeout: float | None = None
     logs_filepath: str | None = None
+    execution_time: float | None = None
+    evaluation_time: float | None = None
 
     @classmethod
     def new(cls) -> Self:
@@ -35,3 +37,11 @@ class Spec:
     def to_dict(self) -> dict:
         # note that this is faster for flat dataclasses
         return {field_.name: getattr(self, field_.name) for field_ in fields(self)}
+
+    def set_execution_time(self, time: float) -> "Spec":
+        """Returns a new instance of Spec with the updated execution_time."""
+        return replace(self, execution_time=time)
+
+    def set_evaluation_time(self, time: float) -> "Spec":
+        """Returns a new instance of Spec with the updated evaluation_time."""
+        return replace(self, evaluation_time=time)

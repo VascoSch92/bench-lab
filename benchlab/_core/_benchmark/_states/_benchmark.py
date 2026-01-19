@@ -1,11 +1,13 @@
 import copy
 import importlib
 import re
+import time
 from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Self
-from typing import ClassVar
+from typing import Any, Self, ClassVar
+
+from rich import table
 
 from benchlab._core._benchmark._spec import Spec
 from benchlab._core._benchmark._states._base import BaseBenchmark
@@ -31,6 +33,9 @@ class Benchmark(BaseBenchmark[InstanceType]):
     _METRICS: ClassVar[dict[str, type["Metric"]]]
     """Map of the metrics for the benchmark"""
 
+    def _task_specific_checks(self) -> None:
+        pass
+
     @classmethod
     def new(
         cls,
@@ -43,6 +48,8 @@ class Benchmark(BaseBenchmark[InstanceType]):
         n_attempts: int = 1,
         timeout: float | None = None,
         logs_filepath: str | None = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> Self:
         logger = get_logger(name=__name__, path=logs_filepath, console=True)
         spec = Spec(
@@ -138,6 +145,8 @@ class Benchmark(BaseBenchmark[InstanceType]):
         fn: BenchmarkCallable,
         args: dict[str, Any] | None = None,
     ) -> BenchmarkExec:
+        start_time = time.perf_counter()
+
         self.logger.info(f"Running benchmark {self._spec.name} for {fn.__name__}")
 
         return_type = fn.__annotations__.get("return", None)
@@ -173,12 +182,41 @@ class Benchmark(BaseBenchmark[InstanceType]):
                     status=status,
                 )
 
+        update_spec = self._spec.set_execution_time(time.perf_counter() - start_time)
         return BenchmarkExec(
             _instances=instances,
             _metrics=self._metrics,
             _aggregators=self.aggregators,
             logger=self.logger,
-            _spec=self._spec,
+            _spec=update_spec,
         )
 
     async def run_async(self) -> None: ...
+
+    def _generate_summary_table(self) -> table.Table:
+        """
+        Generates a rich table summary of the benchmark configuration,
+        including metrics, aggregators, and instance constraints.
+        """
+        summary_table = table.Table(title="Benchmark Summary")
+
+        summary_table.add_column("Property", style="cyan", no_wrap=True)
+        summary_table.add_column("Value", style="magenta")
+
+        summary_table.add_row("Benchmark name", self._spec.name)
+        summary_table.add_row("Number of Instances", str(len(self.instances)))
+        summary_table.add_row("Attempts per Instance", str(self._spec.n_attempts))
+        summary_table.add_row(
+            "Timeout", f"{self._spec.timeout}s" if self._spec.timeout else "None"
+        )
+
+        # Metrics & Aggregators
+        metrics_list = ", ".join([m.name for m in self._metrics]) or "None"
+        aggs_list = ", ".join([a.name for a in self.aggregators]) or "None"
+
+        summary_table.add_row("Metrics", metrics_list)
+        summary_table.add_row("Aggregators", aggs_list)
+        if self._spec.logs_filepath:
+            summary_table.add_row("Logs Path", self._spec.logs_filepath)
+
+        return summary_table

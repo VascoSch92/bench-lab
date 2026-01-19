@@ -18,13 +18,16 @@ def main():
         n_instance=5,
         n_attempts=1,
     )
+    benchmark.summary()
     _ = benchmark.instances
     benchmark.to_json("my_json.json")
     bench = Benchmark.from_json("my_json.json")
     bench_exec = benchmark.run(mock_model, args={"s": "ciao"})
+    bench_exec.summary()
     bench_eval = bench_exec.evaluate()
+    bench_eval.summary()
     report = bench_eval.report()
-    print(report)
+    report.summary()
 
 
 if __name__ == "__main__":
