@@ -1,19 +1,13 @@
-import logging
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import Generic, ClassVar, Final, final, Type, TYPE_CHECKING, Any
+from typing import Generic, ClassVar, final, TYPE_CHECKING, Any
 
-from benchlab._core._evaluation._stats import (
-    RegressionMetricStats,
-    BooleanMetricStats,
-    CategoricalMetricStats,
-)
 from benchlab._core._instance import Attempt
 from benchlab._core._types import MetricOutputType, InstanceType
 
 if TYPE_CHECKING:
-    from benchlab._core._evaluation._stats import MetricStats
+    pass
 
 
 class MetricType(StrEnum):
@@ -29,14 +23,6 @@ class MetricType(StrEnum):
     """Metrics that produce discrete category labels."""
 
 
-# todo: we can delete that
-_METRIC_TYPE_TO_STATS: Final[dict[MetricType, Type["MetricStats"]]] = {
-    MetricType.REGRESSION: RegressionMetricStats,
-    MetricType.BOOLEAN: BooleanMetricStats,
-    MetricType.CATEGORICAL: CategoricalMetricStats,
-}
-
-
 @dataclass(frozen=True, slots=True)
 class Metric(ABC, Generic[InstanceType, MetricOutputType]):
     """Base class for a metric."""
@@ -47,24 +33,17 @@ class Metric(ABC, Generic[InstanceType, MetricOutputType]):
     type_: ClassVar[MetricType]
     """Type of the metric."""
 
-    logger: logging.Logger = field(default_factory=lambda: logging.getLogger("null"))
-    """Logger for the metric."""
-
     @final
     def evaluate(
         self, instance: InstanceType, attempts: list[Attempt]
     ) -> list[MetricOutputType]:
         if self.name in instance.evaluations:
-            self.logger.warning(
-                f"Metric `{self.name}` already evaluated. It will be overwritten."
-            )
+            # todo: what are we doing here?
+            return []
 
-        # TODO: log
         values = [
             self._eval_logic(instance=instance, attempt=attempt) for attempt in attempts
         ]
-
-        self.logger.debug(f"Instance {instance.id} evaluate on metric {self.name}")
 
         return values
 

@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Generic, TYPE_CHECKING, Union, Self
 
 from benchlab._core._benchmark._spec import Spec
+from benchlab._core._evaluation._aggregators._aggregator import Aggregator
 from benchlab._core._evaluation._metrics._metric import Metric
 from benchlab._core._types import InstanceType
 
@@ -86,7 +87,10 @@ class Artifact(Generic[InstanceType]):
     """A list of instances of type `InstanceType`. All items must be of the exact same class."""
 
     metrics: list[Metric]
-    """ list of :class:`Metric` objects"""
+    """List of :class:`Metric` objects"""
+
+    aggregators: list[Aggregator]
+    """List of :class:`Aggregator` objects"""
 
     def __post_init__(self):
         if "class_name" not in self.metadata or "class_module" not in self.metadata:
@@ -112,6 +116,7 @@ class Artifact(Generic[InstanceType]):
             "spec": self.spec.to_dict(),
             "instances": [instance.to_dict() for instance in self.instances],
             "metrics": [metric.to_dict() for metric in self.metrics],
+            "aggregators": [agg.to_dict() for agg in self.aggregators],
         }
 
     @classmethod
@@ -125,12 +130,14 @@ class Artifact(Generic[InstanceType]):
         spec = Spec(**json_artifact["spec"])
         instances = cls._get_instances_from_json(json_artifact["instances"])
         metrics = cls._get_metrics_from_json(json_artifact["metrics"])
+        aggregators = cls._get_aggregators_from_json(json_artifact["aggregators"])
 
         return cls(
             metadata=json_artifact["metadata"],
             spec=spec,
             instances=instances,
             metrics=metrics,
+            aggregators=aggregators,
         )
 
     # todo: change exception in ArtifactCorruptedException
@@ -188,6 +195,26 @@ class Artifact(Generic[InstanceType]):
 
         return metrics
 
+    @staticmethod
+    def _get_aggregators_from_json(
+        json_aggregators: list[dict[str, Any]],
+    ) -> list[Aggregator]:
+        aggregators = []
+
+        for metric in json_aggregators:
+            aggregator_class_module = metric.pop("class_module")
+            aggregator_class_name = metric.pop("class_name")
+
+            module = importlib.import_module(aggregator_class_module)
+            metric_cls = getattr(module, aggregator_class_name, None)
+
+            if metric_cls is None:
+                # todo: better error message
+                raise ValueError
+            aggregators.append(metric_cls())
+
+        return aggregators
+
 
 class BenchmarkArtifact(Generic[InstanceType]):
     def _artifact(self) -> Artifact[InstanceType]:
@@ -199,6 +226,7 @@ class BenchmarkArtifact(Generic[InstanceType]):
             spec=getattr(self, "spec", Spec.new()),
             instances=getattr(self, "instances", []),
             metrics=getattr(self, "metrics", []),
+            aggregators=getattr(self, "aggregators", []),
         )
 
     @classmethod
@@ -363,7 +391,9 @@ class BenchmarkArtifact(Generic[InstanceType]):
             }
             for idx, attempt in enumerate(instance.attempts, 1):
                 row[f"attempt_{idx}"] = attempt.response
-                row[f"runtime_{idx}"] = round(attempt.runtime, 4)
+                row[f"runtime_{idx}"] = (
+                    round(attempt.runtime, 4) if attempt.runtime else None
+                )
                 row[f"status_{idx}"] = attempt.status
 
                 for metric, values in instance.evaluations.items():

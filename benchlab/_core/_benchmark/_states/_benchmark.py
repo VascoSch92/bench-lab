@@ -1,6 +1,5 @@
 import copy
 import importlib
-import logging
 import re
 from abc import abstractmethod
 from dataclasses import dataclass
@@ -11,9 +10,10 @@ from typing import ClassVar
 from benchlab._core._benchmark._spec import Spec
 from benchlab._core._benchmark._states._base import BaseBenchmark
 from benchlab._core._benchmark._states._execution import BenchmarkExec
+from benchlab._core._evaluation._aggregators._aggregator import Aggregator
 from benchlab._core._evaluation._metrics._metric import Metric
 from benchlab._core._logging import get_logger
-from benchlab._core._time import _timed_exec
+from benchlab._core._time import timed_exec
 from benchlab._core._types import BenchmarkCallable, InstanceType
 
 # todo: add token usage or better usage
@@ -36,7 +36,8 @@ class Benchmark(BaseBenchmark[InstanceType]):
         cls,
         name: str,
         instances: list[InstanceType] | None = None,
-        metrics: list[type[Metric]] | None = None,
+        metrics: list[Metric] | None = None,
+        aggregators: list[Aggregator] | None = None,
         instance_ids: list[str] | None = None,
         n_instance: int | None = None,
         n_attempts: int = 1,
@@ -44,8 +45,6 @@ class Benchmark(BaseBenchmark[InstanceType]):
         logs_filepath: str | None = None,
     ) -> Self:
         logger = get_logger(name=__name__, path=logs_filepath, console=True)
-        instances = cls._check_consistency_instances(instances or [])
-        metrics = cls._register_metric(metrics or [], logger=logger)
         spec = Spec(
             name=name,
             instance_ids=instance_ids or [],
@@ -61,29 +60,11 @@ class Benchmark(BaseBenchmark[InstanceType]):
             )
         return cls(
             _spec=spec,
-            _instances=instances,
-            _metrics=metrics,
+            _instances=instances or [],
+            _metrics=metrics or [],
+            _aggregators=aggregators or [],
             logger=logger,
         )
-
-    @staticmethod
-    def _check_consistency_instances(
-        instances: list[InstanceType],
-    ) -> list[InstanceType]:
-        if not instances:
-            return []
-
-        first_type = type(instances[0])
-        if not all(type(i) is first_type for i in instances):
-            raise ValueError("All instances must have the same type.")
-
-        return instances
-
-    @staticmethod
-    def _register_metric(
-        metrics: list[type[Metric]], logger: logging.Logger
-    ) -> list[Metric]:
-        return [metric_cls(logger) for metric_cls in metrics]
 
     @classmethod
     def from_library(
@@ -103,7 +84,9 @@ class Benchmark(BaseBenchmark[InstanceType]):
                 benchmark_cls, metric_names, name
             )
 
-            return benchmark_cls.new(name=name, metrics=metric_cls, **kwargs)
+            return benchmark_cls.new(
+                name=name, metrics=[metric() for metric in metric_cls], **kwargs
+            )
         except (ImportError, AttributeError) as e:
             raise ImportError(
                 f"Could not find benchmark `{name}`. "
@@ -166,31 +149,34 @@ class Benchmark(BaseBenchmark[InstanceType]):
 
         for instance in instances:
             for attempt_id in range(1, self._spec.n_attempts + 1):
-                timed_exec = _timed_exec(
+                timed_execution = timed_exec(
                     fn, self._spec.timeout, instance, **(args or {})
                 )
 
-                if timed_exec.is_success():
+                if timed_execution.is_success:
                     self.logger.info(f"Instance {instance.id} successfull benchmarked")
                     status = "success"
-                elif timed_exec.is_timeout():
+                elif timed_execution.is_timeout:
                     self.logger.info(f"Instance {instance.id} timed out")
                     status = "timeout"
-                else:
+                elif timed_execution.is_error:
                     self.logger.error(
-                        f"Error evaluating instance {instance.id}: {timed_exec.exception}"
+                        f"Error evaluating instance {instance.id}: {timed_execution.exception}"
                     )
                     status = "failure"
+                else:
+                    raise RuntimeError("This should never happens.")
 
                 instance.add_attempt(
-                    response=timed_exec.result,
-                    runtime=timed_exec.runtime,
+                    response=timed_execution.result,
+                    runtime=timed_execution.runtime,
                     status=status,
                 )
 
         return BenchmarkExec(
             _instances=instances,
             _metrics=self._metrics,
+            _aggregators=self.aggregators,
             logger=self.logger,
             _spec=self._spec,
         )

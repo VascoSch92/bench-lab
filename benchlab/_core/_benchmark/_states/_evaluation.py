@@ -1,13 +1,13 @@
+import collections
 from dataclasses import dataclass
 from functools import cached_property
+from typing import DefaultDict
 
 from benchlab._core._benchmark._states._base import BaseBenchmark
 from benchlab._core._benchmark._states._report import BenchmarkReport
+from benchlab._core._evaluation._aggregators._aggregator import AggregatorType
 from benchlab._core._evaluation._metrics._metric import MetricType, Metric
 from benchlab._core._types import InstanceType
-from benchlab._core._evaluation._aggregators._aggregator import AggregatorType
-import collections
-from typing import DefaultDict
 
 __all__ = ["BenchmarkEval"]
 
@@ -29,7 +29,8 @@ class BenchmarkEval(BaseBenchmark[InstanceType]):
                     report = aggregator.aggregate(instances=self._instances)
                     reports.append(report)
                 case AggregatorType.STATUS:
-                    pass
+                    report = aggregator.aggregate(instances=self._instances)
+                    reports.append(report)
                 case AggregatorType.BOOLEAN_METRICS:
                     for metric in self._metric_type_to_metrics[aggregator.type_]:
                         if metric.type_ == aggregator.type_:
@@ -42,6 +43,7 @@ class BenchmarkEval(BaseBenchmark[InstanceType]):
             _spec=self._spec,
             _instances=self._instances,
             _metrics=self._metrics,
-            # _reports=reports,
+            _aggregators=self.aggregators,
+            _reports=reports,
             logger=self.logger,
         )

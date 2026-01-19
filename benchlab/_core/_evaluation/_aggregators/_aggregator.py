@@ -50,6 +50,12 @@ class Aggregator(ABC, Generic[MetricOutputType]):
     @abstractmethod
     def _outer(self, *args, **kwargs) -> float: ...
 
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "class_module": self.__class__.__module__,
+            "class_name": self.__class__.__name__,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class RuntimesAggregator(Aggregator[MetricOutputType]):
@@ -58,7 +64,12 @@ class RuntimesAggregator(Aggregator[MetricOutputType]):
 
     def aggregate(self, instances: list[InstanceType]) -> Report:
         # Step 1: Intra-instance aggregation (Median)
-        instance_medians = [self._inner(inst.runtimes) for inst in instances]
+        instance_medians = [
+            self._inner(
+                [runtime for runtime in instance.runtimes if runtime is not None]
+            )
+            for instance in instances
+        ]
 
         # Step 2: Inter-instance aggregation (Geometric Mean)
         final_score = self._outer(instance_medians)
@@ -85,6 +96,49 @@ class RuntimesAggregator(Aggregator[MetricOutputType]):
             return 0.0
 
         return float(np.exp(np.log(arr).mean()))
+
+
+@dataclass(frozen=True, slots=True)
+class StatusAggregator(Aggregator[MetricOutputType]):
+    name = "status_success_rate_aggregator"
+    type_ = AggregatorType.STATUS
+
+    def aggregate(self, instances: list[InstanceType]) -> Report:
+        instance_metrics = []
+        inner_output: dict[str, float] = {}
+        weights: list[int] = []
+
+        for instance in instances:
+            # 1. Collect statuses (True for COMPLETED, False otherwise)
+            # Assuming run.status is an Enum or String
+            success_flags = [
+                1 if status == "success" else 0 for status in instance.statuses
+            ]
+
+            if not success_flags:
+                continue
+
+            instance_success_rate = self._inner(success_flags)
+            inner_output[instance.id] = instance_success_rate
+
+            weights.append(len(success_flags))
+            instance_metrics.append(instance_success_rate)
+
+        return Report(
+            aggregator_name=self.name,
+            inner_output=inner_output,
+            outer_output=self._outer(success_rates=instance_metrics, weights=weights),
+        )
+
+    def _inner(self, statuses: list[int]) -> float:
+        """Computes the median success rate for a single instance."""
+        if not statuses:
+            return 0.0
+        return float(np.median(statuses))
+
+    def _outer(self, success_rates: list[float], weights: list[int]) -> float:
+        """Computes the weighted arithmetic mean."""
+        return float(np.average(success_rates, weights=weights))
 
 
 # todo: complete here

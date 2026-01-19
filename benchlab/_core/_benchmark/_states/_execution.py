@@ -31,4 +31,5 @@ class BenchmarkExec(BaseBenchmark[InstanceType]):
             _instances=instances,
             logger=self.logger,
             _metrics=self._metrics,
+            _aggregators=self._aggregators,
         )

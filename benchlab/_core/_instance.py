@@ -23,12 +23,12 @@ class AttemptStatus(StrEnum):
 @dataclass(frozen=True, slots=True)
 class Attempt:
     _response: AnswerType
-    _runtime: float
+    _runtime: float | None
     _status: AttemptStatus
 
     @classmethod
     def new(
-        cls, response: AnswerType, runtime: float, status: AttemptStatus
+        cls, response: AnswerType, runtime: float | None, status: AttemptStatus
     ) -> "Attempt":
         return cls(response, runtime, status)
 
@@ -37,7 +37,7 @@ class Attempt:
         return self._response
 
     @property
-    def runtime(self) -> float:
+    def runtime(self) -> float | None:
         return self._runtime
 
     @property
@@ -70,7 +70,7 @@ class Instance(ABC):
         return [attempt.response for attempt in self.attempts]
 
     @property
-    def runtimes(self) -> list[float]:
+    def runtimes(self) -> list[float | None]:
         return [attempt.runtime for attempt in self.attempts]
 
     @property
@@ -81,8 +81,10 @@ class Instance(ABC):
     def evaluations(self) -> MappingProxyType[str, list[Any]]:
         return MappingProxyType(self._evaluated_attempts)
 
-    def add_attempt(self, response: AnswerType, runtime: float, status: str) -> None:
-        if runtime < 0.0:
+    def add_attempt(
+        self, response: AnswerType, runtime: float | None, status: str
+    ) -> None:
+        if runtime is not None and runtime < 0.0:
             raise ValueError(f"Runtime must be greater than zero. Got {runtime}")
         if status not in AttemptStatus:
             raise ValueError(f"Status must be one of {AttemptStatus.__members__}")
