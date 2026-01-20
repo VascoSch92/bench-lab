@@ -5,16 +5,24 @@ from typing import DefaultDict
 
 from rich import table
 
-from benchlab._core._benchmark._states._base import BaseBenchmark
-from benchlab._core._benchmark._states._evaluation import BenchmarkEval
-from benchlab._core._evaluation._metrics._metric import Metric
-from benchlab._core._types import InstanceType
+from benchlab._benchmark._states._base import BaseBenchmark
+from benchlab._benchmark._states._evaluation import BenchmarkEval
+from benchlab.metrics._base import Metric
+from benchlab._types import InstanceType
 
 __all__ = ["BenchmarkExec"]
 
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkExec(BaseBenchmark[InstanceType]):
+    """
+    Represents the state of a benchmark after execution but before evaluation.
+
+    This class holds the raw results (responses, runtimes, and statuses) for all
+    benchmark instances. it provides methods to attach metrics and transition the
+    benchmark data into the evaluation phase.
+    """
+
     def _task_specific_checks(self) -> None:
         # todo: complete with check that every instance was runned the correct number of times
         pass

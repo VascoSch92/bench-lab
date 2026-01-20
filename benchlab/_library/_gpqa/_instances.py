@@ -1,4 +1,4 @@
-from benchlab._core._instance import Instance
+from benchlab._instance import Instance
 
 
 class GPQAInstance(Instance):

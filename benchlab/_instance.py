@@ -4,7 +4,7 @@ from enum import StrEnum
 from types import MappingProxyType
 from typing import Any
 
-from benchlab._core._types import AnswerType
+from benchlab._types import AnswerType
 
 
 class AttemptStatus(StrEnum):

@@ -1,12 +1,11 @@
 from benchlab import Benchmark
-from benchlab._core._evaluation._aggregators._aggregator import (
-    RuntimesAggregator,
-    StatusAggregator,
-)
+from benchlab.aggregators import RuntimesAggregator, StatusAggregator
+import random
 
 
-def mock_model(instance, s: str) -> str:
-    return " I don't know what to do!" + s
+def mock_model(instance) -> str:
+    random_answer = random.randint(1, 10)
+    return f"The answer for question {instance.id} is {random_answer}."
 
 
 def main():
@@ -18,8 +17,12 @@ def main():
         n_instance=5,
         n_attempts=1,
     )
+    execution = benchmark.run(mock_model, args={"s": "ciao"})
+    evaluation = execution.evaluate()
+    report = evaluation.report()
+    report.summary()
+
     benchmark.summary()
-    _ = benchmark.instances
     benchmark.to_json("my_json.json")
     bench = Benchmark.from_json("my_json.json")
     bench_exec = benchmark.run(mock_model, args={"s": "ciao"})

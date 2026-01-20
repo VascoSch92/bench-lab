@@ -7,16 +7,15 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Generic, TYPE_CHECKING, Union, Self
 
-from benchlab._core._benchmark._spec import Spec
-from benchlab._core._evaluation._aggregators._aggregator import Aggregator
-from benchlab._core._evaluation._metrics._metric import Metric
-from benchlab._core._types import InstanceType
+from benchlab._benchmark._spec import Spec
+from benchlab.aggregators._base import Aggregator
+from benchlab.metrics._base import Metric
+from benchlab._exceptions import ArtifactCorruptedError
+from benchlab._types import InstanceType
 
 if TYPE_CHECKING:
-    from benchlab._core._benchmark._states._benchmark import Benchmark
-    from benchlab._core._benchmark._states._execution import BenchmarkExec
-    from benchlab._core._benchmark._states._evaluation import BenchmarkEval
-    from benchlab._core._benchmark._states._report import BenchmarkReport
+    from ._states import BenchmarkReport, BenchmarkEval, BenchmarkExec, Benchmark
+
 
 __all__ = ["BenchmarkArtifact"]
 
@@ -38,6 +37,19 @@ class ArtifactType(StrEnum):
 
     @classmethod
     def from_string(cls, input_: str):
+        """
+        Converts a string input into a valid ArtifactType member.
+
+        Args:
+            input_: The string value to convert.
+
+        Returns:
+            The corresponding ArtifactType instance.
+
+        Raises:
+            RuntimeError: If the input string does not match any known
+                ArtifactType values.
+        """
         match input_:
             case (
                 ArtifactType.BENCHMARK
@@ -51,6 +63,12 @@ class ArtifactType(StrEnum):
 
     @property
     def _rank(self) -> dict[str, int]:
+        """
+        Provides a numeric mapping for the logical order of artifacts.
+
+        This internal mapping ensures that artifacts follow the sequential
+        pipeline: Benchmark -> Execution -> Evaluation -> Report.
+        """
         return {
             ArtifactType.BENCHMARK: 1,
             ArtifactType.EXECUTION: 2,
@@ -59,6 +77,18 @@ class ArtifactType(StrEnum):
         }
 
     def __lt__(self, other) -> bool:
+        """
+        Determines if this artifact type precedes another in the pipeline.
+
+        Args:
+            other: The other ArtifactType to compare against.
+
+        Returns:
+            True if this artifact occurs earlier in the lifecycle than the other.
+
+        Raises:
+            TypeError: If compared against a non-ArtifactType object.
+        """
         if not isinstance(other, ArtifactType):
             return NotImplemented
         return self._rank[self] < other._rank[other]
@@ -95,13 +125,19 @@ class Artifact(Generic[InstanceType]):
     def __post_init__(self):
         if "class_name" not in self.metadata or "class_module" not in self.metadata:
             # todo: implement our excpetion ArtifactCorrupted
-            raise ValueError(
-                "artifact metadata must contain 'class_name' and 'class_module'"
+            raise ArtifactCorruptedError(
+                "Artifact metadata must contain `class_name` and `class_module`fields."
             )
-        # todo: check also here that all the instances have the same class :-)
+        if self.instances:
+            instance_type = type(self.instances[0])
+            if not all(type(instance) is instance_type for instance in self.instances):
+                raise ArtifactCorruptedError(
+                    "Artifact instances must all be of the same type."
+                )
 
     @property
     def type_(self) -> ArtifactType:
+        """Returns the articat type of the artifact."""
         class_name, class_module = (
             self.metadata["class_name"],
             self.metadata["class_module"],
@@ -111,6 +147,7 @@ class Artifact(Generic[InstanceType]):
         return ArtifactType.from_string(class_name)
 
     def to_dict(self) -> dict[str, Any]:
+        """Convert an Artifact to a dictionary."""
         return {
             "metadata": self.metadata,
             "spec": self.spec.to_dict(),
@@ -121,16 +158,30 @@ class Artifact(Generic[InstanceType]):
 
     @classmethod
     def from_json(cls, path: str | Path) -> Self:
+        """
+        Initializes an instance by loading and parsing a JSON file.
+
+        Args:
+            path: The file system path to the JSON file, provided as a string
+                or a Path object.
+
+        Returns:
+            An initialized instance of the class (Self) populated with the
+            data from the JSON file.
+
+        Raises:
+            FileNotFoundError: If the specified path does not exist.
+            json.JSONDecodeError: If the file is not a valid JSON document.
+            KeyError: If the JSON structure is missing required top-level keys.
+        """
         path = Path(path)
         with path.open("r") as f:
             json_artifact = json.load(f)
 
-        # todo: check that we have good number of keys.
-        # todo: they should be exactly 4
         spec = Spec(**json_artifact["spec"])
-        instances = cls._get_instances_from_json(json_artifact["instances"])
-        metrics = cls._get_metrics_from_json(json_artifact["metrics"])
-        aggregators = cls._get_aggregators_from_json(json_artifact["aggregators"])
+        instances = cls._load_objects_from_json(json_artifact["instances"], True)
+        metrics = cls._load_objects_from_json(json_artifact["metrics"], False)
+        aggregators = cls._load_objects_from_json(json_artifact["aggregators"], False)
 
         return cls(
             metadata=json_artifact["metadata"],
@@ -140,84 +191,70 @@ class Artifact(Generic[InstanceType]):
             aggregators=aggregators,
         )
 
-    # todo: change exception in ArtifactCorruptedException
     @staticmethod
-    def _get_instances_from_json(
-        json_instances: list[dict[str, Any]],
-    ) -> list[InstanceType]:
-        instances: list[InstanceType] = []
+    def _load_objects_from_json(
+        data_list: list[dict[str, Any]],
+        enforce_single_class: bool,
+    ) -> list[Any]:
+        """
+        Generic helper to dynamically import and instantiate classes from JSON data.
 
-        class_module: str | None = None
-        class_name: str | None = None
-        instance_cls: type[InstanceType] | None = None
-        for instance in json_instances:
-            instance_class_module = instance.pop("class_module")
-            instance_class_name = instance.pop("class_name")
+        Args:
+            data_list: List of dictionaries containing 'class_module' and 'class_name'.
+            enforce_single_class: If True, raises ValueError if the list contains
+                different class types.
 
-            if instance_cls is None:
-                # we need to import the class cls just once as
-                # we suppose all the classes have the same instance
-                class_module = instance_class_module
-                class_name = instance_class_name
-                module = importlib.import_module(class_module)
-                instance_cls = getattr(module, class_name, None)
+        Returns:
+            A list of the instantiate objects.
 
-                if instance_cls is None:
-                    # todo: better error msg
-                    raise ValueError
+        Raises:
+            ArtifactCorruptedError: if `enforce_single_class` is True, and input contains
+                different classes types.
+        """
+        results: list[Any] = []
+        first_cls_info: str | None = None
+        cached_cls = None
 
-            if (
-                instance_class_module != class_module
-                or instance_class_name != class_name
-            ):
-                raise ValueError("All the instance must be of the same class.")
+        for item in data_list:
+            # Extract class info
+            module_name = item.pop("class_module")
+            class_name = item.pop("class_name")
 
-            assert instances is not None
-            loaded_instance = instance_cls(**instance)
-            instances.append(loaded_instance)
-        return instances
+            if enforce_single_class:
+                if first_cls_info and (module_name, class_name) != first_cls_info:
+                    raise ArtifactCorruptedError(
+                        "All items must be of the same class type.\n"
+                        f"But got {first_cls_info} and {module_name}.{class_name}."
+                    )
+                first_cls_info = f"{module_name}.{class_name}"
 
-    @staticmethod
-    def _get_metrics_from_json(json_metrics: list[dict[str, Any]]) -> list[Metric]:
-        metrics = []
+            # Import the class. If `enforce_single_class` is True, then reuse the cached one.
+            if cached_cls is None or not enforce_single_class:
+                module = importlib.import_module(module_name)
+                cls = getattr(module, class_name, None)
+                if cls is None:
+                    raise ArtifactCorruptedError(
+                        f"Class {class_name} not found in {module_name}"
+                    )
+                cached_cls = cls
 
-        for metric in json_metrics:
-            metric_class_module = metric.pop("class_module")
-            metric_class_name = metric.pop("class_name")
+            results.append(cached_cls(**item))
 
-            module = importlib.import_module(metric_class_module)
-            metric_cls = getattr(module, metric_class_name, None)
-
-            if metric_cls is None:
-                # todo: better error message
-                raise ValueError
-            metrics.append(metric_cls())
-
-        return metrics
-
-    @staticmethod
-    def _get_aggregators_from_json(
-        json_aggregators: list[dict[str, Any]],
-    ) -> list[Aggregator]:
-        aggregators = []
-
-        for metric in json_aggregators:
-            aggregator_class_module = metric.pop("class_module")
-            aggregator_class_name = metric.pop("class_name")
-
-            module = importlib.import_module(aggregator_class_module)
-            metric_cls = getattr(module, aggregator_class_name, None)
-
-            if metric_cls is None:
-                # todo: better error message
-                raise ValueError
-            aggregators.append(metric_cls())
-
-        return aggregators
+        return results
 
 
 class BenchmarkArtifact(Generic[InstanceType]):
+    """
+    A base mixin or component class that provides serialization and
+    deserialization capabilities for benchmark lifecycle states.
+
+    This class facilitates the conversion between live Python objects
+    (Benchmark, Execution, Evaluation, Report) and persistent formats
+    like JSON and CSV.
+    """
+
     def _artifact(self) -> Artifact[InstanceType]:
+        """Creates an intermediate Artifact representation of the current instance."""
         return Artifact(
             metadata={
                 "class_name": self.__class__.__name__,
@@ -239,15 +276,34 @@ class BenchmarkArtifact(Generic[InstanceType]):
         "BenchmarkEval[InstanceType]",
         "BenchmarkReport[InstanceType]",
     ]:
+        """
+        Factory method to reconstruct a benchmark state from a JSON file.
+
+        The method also validates that the artifact type stored in the JSON is
+        compatible with the class being called (e.g., you cannot load a raw
+        Benchmark as a BenchmarkReport).
+
+        Args:
+            path: Path to the JSON artifact file.
+
+        Returns:
+            A concrete instance of a Benchmark state (`Benchmark`, `Exec`, `Eval`, or `Report`).
+
+        Raises:
+            ValueError: If the artifact type in the file is logically
+                incompatible with the calling class.
+            RuntimeError: If an unknown artifact type is encountered.
+        """
         artifact: Artifact = Artifact.from_json(path)
 
         artifact_type = artifact.type_
         cls_type = ArtifactType.from_string(cls.__name__)
         if artifact_type < cls_type:
-            # todo: the error msg is not so clear :-)
             raise ValueError(
-                f"It is not possible to instantiate an artifact type {cls_type} with \n"
-                f"an artifact of type {artifact_type}."
+                f"Incompatible Artifact Stage: Cannot initialize a '{cls.__name__}' "
+                f"from a '{artifact_type}' file.\n"
+                f"The requested class requires data from the '{cls_type}' stage or later, "
+                f"but the provided file is only at the '{artifact_type}' stage.\n"
             )
 
         match cls_type:
@@ -287,7 +343,13 @@ class BenchmarkArtifact(Generic[InstanceType]):
         spec: Spec,
         from_library: bool,
     ) -> "Benchmark[InstanceType]":
-        from benchlab._core._benchmark._states._benchmark import Benchmark
+        """
+        Internal factory to create a Benchmark instance.
+
+        Cleans instances of previous run data (attempts/evaluations) to ensure
+        a fresh state and handles initialization via the library or direct creation.
+        """
+        from benchlab._benchmark._states._benchmark import Benchmark
 
         for j in range(len(instances)):
             if instances[j].attempts or instances[j].evaluations:
@@ -322,7 +384,12 @@ class BenchmarkArtifact(Generic[InstanceType]):
         metrics: list[Metric],
         spec: Spec,
     ) -> "BenchmarkExec[InstanceType]":
-        from benchlab._core._benchmark._states._execution import BenchmarkExec
+        """
+        Internal factory to create a BenchmarkExec instance.
+
+        Ensures that evaluation data is cleared while preserving execution attempts.
+        """
+        from benchlab._benchmark._states._execution import BenchmarkExec
 
         for j in range(len(instances)):
             if instances[j].evaluations:
@@ -343,7 +410,8 @@ class BenchmarkArtifact(Generic[InstanceType]):
         metrics: list[Metric],
         spec: Spec,
     ) -> "BenchmarkEval[InstanceType]":
-        from benchlab._core._benchmark._states._evaluation import BenchmarkEval
+        """Internal factory to create a BenchmarkEval instance."""
+        from benchlab._benchmark._states._evaluation import BenchmarkEval
 
         return BenchmarkEval(
             _instances=instances,
@@ -357,7 +425,9 @@ class BenchmarkArtifact(Generic[InstanceType]):
         metrics: list[Metric],
         spec: Spec,
     ) -> "BenchmarkReport[InstanceType]":
-        from benchlab._core._benchmark._states._report import BenchmarkReport
+        """Internal factory to create a BenchmarkReport instance."""
+
+        from benchlab._benchmark._states._report import BenchmarkReport
 
         return BenchmarkReport(
             _instances=instances,
@@ -366,6 +436,13 @@ class BenchmarkArtifact(Generic[InstanceType]):
         )
 
     def to_json(self, output_path: Path | str | None = None) -> None:
+        """
+        Serializes the current benchmark state to a JSON file.
+
+        Args:
+            output_path: Destination path. If `None`, a default name is generated
+                using the class name and a timestamp.
+        """
         output_path = self._validate_path(output_path=output_path, extension=".json")
 
         artifact_dict = self._artifact().to_dict()
@@ -374,6 +451,15 @@ class BenchmarkArtifact(Generic[InstanceType]):
             json.dump(artifact_dict, f, indent=4)
 
     def to_csv(self, output_path: Path | str | None = None) -> None:
+        """
+        Exports the benchmark results to a flattened CSV format.
+
+        This method flattens the nested structure of instances, attempts, and
+        evaluations into a tabular format suitable for data analysis tools.
+
+        Args:
+            output_path: Destination path for the CSV file.
+        """
         output_path = self._validate_path(output_path=output_path, extension=".csv")
 
         artifact = self._artifact()
@@ -411,6 +497,20 @@ class BenchmarkArtifact(Generic[InstanceType]):
             writer.writerows(rows)
 
     def _validate_path(self, output_path: Path | str | None, extension: str) -> Path:
+        """
+        Ensures the provided path is valid and has the correct file extension.
+        If `None` is provided, the default output path is used, i.e., <CLASS_NAME>_uuid.
+
+        Args:
+            output_path: The user-provided path or None.
+            extension: The required file extension (e.g., '.json' or '.csv').
+
+        Returns:
+            A validated Path object.
+
+        Raises:
+            ValueError: If the provided path has an incorrect extension.
+        """
         if output_path is None:
             name = self.__class__.__name__.lower()
             uuid = int(datetime.now().strftime("%H%M%S%f")[:8])

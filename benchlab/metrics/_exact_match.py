@@ -1,7 +1,8 @@
-from benchlab._core._evaluation._metrics._metric import Metric, MetricType
-from benchlab._core._instance import Attempt
-from benchlab._core._types import InstanceType
 import re
+
+from benchlab.metrics._base import Metric, MetricType
+from benchlab._instance import Attempt
+from benchlab._types import InstanceType
 
 
 class ExactMatchMetric(Metric[InstanceType, bool | None]):

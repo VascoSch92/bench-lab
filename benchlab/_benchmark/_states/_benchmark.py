@@ -5,18 +5,20 @@ import time
 from abc import abstractmethod
 from dataclasses import dataclass
 from functools import cached_property
-from typing import Any, Self, ClassVar
+from typing import Any, Self, ClassVar, TYPE_CHECKING
 
 from rich import table
 
-from benchlab._core._benchmark._spec import Spec
-from benchlab._core._benchmark._states._base import BaseBenchmark
-from benchlab._core._benchmark._states._execution import BenchmarkExec
-from benchlab._core._evaluation._aggregators._aggregator import Aggregator
-from benchlab._core._evaluation._metrics._metric import Metric
-from benchlab._core._logging import get_logger
-from benchlab._core._time import timed_exec
-from benchlab._core._types import BenchmarkCallable, InstanceType
+from benchlab._benchmark._spec import Spec
+from benchlab._benchmark._states._base import BaseBenchmark
+from benchlab._benchmark._states._execution import BenchmarkExec
+from benchlab._types import BenchmarkCallable, InstanceType
+from benchlab.utils import get_logger
+from benchlab.utils import timed_exec
+
+if TYPE_CHECKING:
+    from benchlab.metrics._base import Metric
+    from benchlab.aggregators._base import Aggregator
 
 # todo: add token usage or better usage
 # todo: check how logger works if we have a logger in our main program
@@ -28,7 +30,18 @@ __all__ = ["Benchmark"]
 
 @dataclass(frozen=True, slots=True)
 class Benchmark(BaseBenchmark[InstanceType]):
-    """Class to run benchmarks"""
+    """
+    An immutable definition of a benchmark task used to evaluate function performance.
+
+    This class serves as the entry point for the benchmarking lifecycle. It defines
+    the data (instances), the success criteria (metrics), and the execution
+    parameters (timeout, attempts). Once defined, calling the `run` method
+    transitions the benchmark into a `BenchmarkExec` state.
+
+    Attributes:
+        _METRICS: A class-level registry mapping metric names to their respective
+            implementation classes.
+    """
 
     _METRICS: ClassVar[dict[str, type["Metric"]]]
     """Map of the metrics for the benchmark"""
@@ -41,8 +54,8 @@ class Benchmark(BaseBenchmark[InstanceType]):
         cls,
         name: str,
         instances: list[InstanceType] | None = None,
-        metrics: list[Metric] | None = None,
-        aggregators: list[Aggregator] | None = None,
+        metrics: list["Metric"] | None = None,
+        aggregators: list["Aggregator"] | None = None,
         instance_ids: list[str] | None = None,
         n_instance: int | None = None,
         n_attempts: int = 1,
@@ -103,7 +116,7 @@ class Benchmark(BaseBenchmark[InstanceType]):
     @staticmethod
     def _convert_metric_names_to_cls(
         benchmark_cls: type["Benchmark"], metric_names, name
-    ) -> list[type[Metric]]:
+    ) -> list[type["Metric"]]:
         if len(metric_names) != len(set(metric_names)):
             raise ValueError("Duplicated metrics. Metrics must be unique.")
         metric_cls = []

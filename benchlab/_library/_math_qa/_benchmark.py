@@ -3,7 +3,7 @@ from typing import final
 from datasets import load_dataset
 
 from benchlab import Benchmark
-from benchlab._core._evaluation._metrics._exact_match import ExactMatchMetric
+from benchlab.metrics import ExactMatchMetric
 from benchlab._library._math_qa._instance import MathQAInstance
 
 

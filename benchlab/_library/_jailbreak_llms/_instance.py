@@ -1,8 +1,8 @@
 from dataclasses import dataclass
 from typing import Any
 
-from benchlab._core._instance import Instance
-from benchlab._core._types import AnswerType
+from benchlab._instance import Instance
+from benchlab._types import AnswerType
 
 
 @dataclass(slots=True, frozen=True, kw_only=True)

@@ -5,7 +5,6 @@ from typing import Literal
 
 import yaml
 
-
 __all__ = ["get_logger"]
 
 

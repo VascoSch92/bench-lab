@@ -1,7 +1,7 @@
 import os
 from typing import final
 
-from benchlab._core._benchmark._states._benchmark import Benchmark
+from benchlab._benchmark._states._benchmark import Benchmark
 from benchlab._library._gpqa._instances import GPQAInstance
 
 

@@ -1,15 +1,25 @@
 from dataclasses import dataclass, field
 
-from benchlab._core._benchmark._states._base import BaseBenchmark
-from benchlab._core._types import InstanceType
-from benchlab._core._evaluation._aggregators._aggregator import Report
 from rich import table
+
+from benchlab._benchmark._states._base import BaseBenchmark
+from benchlab.aggregators._base import Report
+from benchlab._types import InstanceType
 
 __all__ = ["BenchmarkReport"]
 
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkReport(BaseBenchmark[InstanceType]):
+    """
+    The final state of the benchmark pipeline, containing aggregated results.
+
+    This class serves as the container for summarized data generated during
+    the reporting phase. it holds high-level 'Report' objects which encapsulate
+    the final computed values for the entire benchmark run, such as mean
+    runtimes, success rates, or global metric averages.
+    """
+
     _reports: list[Report] = field(default_factory=list)
 
     def _task_specific_checks(self) -> None:

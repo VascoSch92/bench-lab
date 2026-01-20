@@ -3,8 +3,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Generic, ClassVar, final, TYPE_CHECKING, Any
 
-from benchlab._core._instance import Attempt
-from benchlab._core._types import MetricOutputType, InstanceType
+from benchlab._instance import Attempt
+from benchlab._types import MetricOutputType, InstanceType
 
 if TYPE_CHECKING:
     pass

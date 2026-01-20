@@ -4,11 +4,11 @@ from dataclasses import dataclass, field
 
 from rich import console, table
 
-from benchlab._core._benchmark._artifacts import BenchmarkArtifact
-from benchlab._core._benchmark._spec import Spec
-from benchlab._core._evaluation._aggregators._aggregator import Aggregator
-from benchlab._core._evaluation._metrics._metric import Metric
-from benchlab._core._types import InstanceType
+from benchlab._benchmark._artifacts import BenchmarkArtifact
+from benchlab._benchmark._spec import Spec
+from benchlab.aggregators._base import Aggregator
+from benchlab.metrics._base import Metric
+from benchlab._types import InstanceType
 
 
 @dataclass(frozen=True, slots=True)

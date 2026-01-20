@@ -1,9 +1,7 @@
 from typing import TypeAlias, Protocol, runtime_checkable, Any, TypeVar, TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from benchlab._core._instance import Instance
-    from benchlab._core._evaluation._stats import BooleanMetricStats
-
+    from ._instance import Instance
 
 """Typying Benchmark related."""
 
@@ -45,6 +43,3 @@ CategoricalOutputType: TypeAlias = str | int | None
 
 AggregatorType = TypeVar("AggregatorType")
 """Type var for the aggregator Type"""
-
-AggregatorBooleanType: TypeAlias = "BooleanMetricStats"
-"""Type for aggregator on boolean stats."""

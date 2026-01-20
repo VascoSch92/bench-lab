@@ -5,17 +5,26 @@ from typing import DefaultDict
 
 from rich import table
 
-from benchlab._core._benchmark._states._base import BaseBenchmark
-from benchlab._core._benchmark._states._report import BenchmarkReport
-from benchlab._core._evaluation._aggregators._aggregator import AggregatorType, Report
-from benchlab._core._evaluation._metrics._metric import MetricType, Metric
-from benchlab._core._types import InstanceType
+from benchlab._benchmark._states._base import BaseBenchmark
+from benchlab._benchmark._states._report import BenchmarkReport
+from benchlab.aggregators._base import AggregatorType, Report
+from benchlab.metrics._base import MetricType, Metric
+from benchlab._types import InstanceType
 
 __all__ = ["BenchmarkEval"]
 
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkEval(BaseBenchmark[InstanceType]):
+    """
+    Represents the state of a benchmark where all instances have been evaluated
+    against registered metrics.
+
+    This class serves as the analytical layer of the benchmarking process. It organizes
+    raw metric scores across instances and attempts, providing the logic to aggregate
+    these scores into a final structured report.
+    """
+
     def _task_specific_checks(self) -> None:
         # todo: complete with check for instance
         pass
