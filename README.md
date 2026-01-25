@@ -13,35 +13,32 @@ Bench Lab is a framework for evaluating large language models (LLMs), agents, an
 Simple example of the API.
 
 ```python
-from benchlab import Benchmark
-from benchlab.aggregators import RuntimesAggregator, StatusAggregator
 import random
+
+# import your favorite benchmark from the library
+from benchlab.library.math_qa._benchmark import MathQABench
 
 
 def mock_model(instance) -> str:
     random_answer = random.randint(1, 10)
     return f"The answer for question {instance.id} is {random_answer}."
 
-# a benchmark is composed by 4 states: 
-# definition, execution, evaluation, aggregation
 
-# definition of the benchmark
-benchmark = Benchmark.from_library(
-    name="MathQA",
-    metric_names=["exact_match"],
-    aggregators=[RuntimesAggregator(), StatusAggregator()],
-    timeout=None,
-    n_instance=5,
-    n_attempts=1,
-)
+def main():
+    # init the benchmark
+    benchmark = MathQABench(n_instance=5)
+    
+    # run your implementation on the benchmark
+    execution = benchmark.run(mock_model, args={"s": "ciao"})
+    
+    # evaluate them 
+    evaluation = execution.evaluate()
+    
+    # finally, aggregate the results and print the benchmark report
+    report = evaluation.report()
+    report.summary()
 
-# execution of the benchmark
-execution = benchmark.run(mock_model)
 
-# evaluation of the execution
-evaluation = execution.evaluate()
-
-# aggregation of the results 
-report = evaluation.report()
-report.summary()
+if __name__ == "__main__":
+    main()
 ```

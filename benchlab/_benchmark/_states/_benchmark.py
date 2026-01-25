@@ -1,24 +1,13 @@
-import copy
-import importlib
-import re
 import time
-from abc import abstractmethod
 from dataclasses import dataclass
-from functools import cached_property
-from typing import Any, Self, ClassVar, TYPE_CHECKING
+from typing import Any
 
 from rich import table
 
-from benchlab._benchmark._spec import Spec
 from benchlab._benchmark._states._base import BaseBenchmark
 from benchlab._benchmark._states._execution import BenchmarkExec
 from benchlab._types import BenchmarkCallable, InstanceType
-from benchlab.utils import get_logger
 from benchlab.utils import timed_exec
-
-if TYPE_CHECKING:
-    from benchlab.metrics._base import Metric
-    from benchlab.aggregators._base import Aggregator
 
 # todo: add token usage or better usage
 # todo: check how logger works if we have a logger in our main program
@@ -37,121 +26,10 @@ class Benchmark(BaseBenchmark[InstanceType]):
     the data (instances), the success criteria (metrics), and the execution
     parameters (timeout, attempts). Once defined, calling the `run` method
     transitions the benchmark into a `BenchmarkExec` state.
-
-    Attributes:
-        _METRICS: A class-level registry mapping metric names to their respective
-            implementation classes.
     """
-
-    _METRICS: ClassVar[dict[str, type["Metric"]]]
-    """Map of the metrics for the benchmark"""
 
     def _task_specific_checks(self) -> None:
         pass
-
-    @classmethod
-    def new(
-        cls,
-        name: str,
-        instances: list[InstanceType] | None = None,
-        metrics: list["Metric"] | None = None,
-        aggregators: list["Aggregator"] | None = None,
-        instance_ids: list[str] | None = None,
-        n_instance: int | None = None,
-        n_attempts: int = 1,
-        timeout: float | None = None,
-        logs_filepath: str | None = None,
-        *args: Any,
-        **kwargs: Any,
-    ) -> Self:
-        logger = get_logger(name=__name__, path=logs_filepath, console=True)
-        spec = Spec(
-            name=name,
-            instance_ids=instance_ids or [],
-            n_instance=n_instance,
-            n_attempts=n_attempts,
-            timeout=timeout,
-            logs_filepath=logs_filepath,
-        )
-        if n_instance is not None and instance_ids is not None:
-            logger.warning(
-                "Arguments `n_instance` and `instance_ids` are specified at the same time.\n"
-                "`n_instance` instances will be selected from `instance_ids`."
-            )
-        return cls(
-            _spec=spec,
-            _instances=instances or [],
-            _metrics=metrics or [],
-            _aggregators=aggregators or [],
-            logger=logger,
-        )
-
-    @classmethod
-    def from_library(
-        cls, name: str, metric_names: list[str], **kwargs
-    ) -> "Benchmark[Any]":
-        # convert from camel case to snake case
-        snake_name = re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", name).lower()
-
-        module_path = f"benchlab._library._{snake_name}._benchmark"
-        class_name = f"{name}Benchmark"
-
-        try:
-            module = importlib.import_module(module_path)
-            benchmark_cls = getattr(module, class_name)
-
-            metric_cls = cls._convert_metric_names_to_cls(
-                benchmark_cls, metric_names, name
-            )
-
-            return benchmark_cls.new(
-                name=name, metrics=[metric() for metric in metric_cls], **kwargs
-            )
-        except (ImportError, AttributeError) as e:
-            raise ImportError(
-                f"Could not find benchmark `{name}`. "
-                f"Check naming conventions. Error: {e}"
-            )
-
-    @staticmethod
-    def _convert_metric_names_to_cls(
-        benchmark_cls: type["Benchmark"], metric_names, name
-    ) -> list[type["Metric"]]:
-        if len(metric_names) != len(set(metric_names)):
-            raise ValueError("Duplicated metrics. Metrics must be unique.")
-        metric_cls = []
-        for metric_name in metric_names:
-            if metric_name not in benchmark_cls._METRICS:
-                raise ValueError(
-                    f"Metric `{metric_name}` is not supported by benchmark `{name}`.\n"
-                    f"Available metrics: {sorted(benchmark_cls._METRICS.keys())}"
-                )
-            metric_cls.append(benchmark_cls._METRICS[metric_name])
-        return metric_cls
-
-    @cached_property
-    def instances(self) -> list[InstanceType]:
-        self.logger.info("Loading benchmark instances...")
-        dataset = self._load_dataset()
-        instances = self._filter_instances(dataset)
-        self.logger.info(f"Loaded {len(instances)} instances")
-        return instances
-
-    def _filter_instances(self, dataset: list[InstanceType]) -> list[InstanceType]:
-        """Private method to filter a dataset"""
-        filter_dataset = dataset
-        if self._spec.instance_ids:
-            filter_dataset = [
-                instance
-                for instance in dataset
-                if instance.id in self._spec.instance_ids
-            ]
-        if self._spec.n_instance is not None:
-            filter_dataset = filter_dataset[: self._spec.n_instance]
-        return filter_dataset
-
-    @abstractmethod
-    def _load_dataset(self) -> list[InstanceType]: ...
 
     def run(
         self,
@@ -166,10 +44,7 @@ class Benchmark(BaseBenchmark[InstanceType]):
         if return_type is None:
             self.logger.warning("No return type detected")
 
-        # deepcopy instances to not change the ones owned by the benchmark
-        instances = copy.deepcopy(self.instances)
-
-        for instance in instances:
+        for instance in self.instances:
             for attempt_id in range(1, self._spec.n_attempts + 1):
                 timed_execution = timed_exec(
                     fn, self._spec.timeout, instance, **(args or {})
@@ -194,14 +69,13 @@ class Benchmark(BaseBenchmark[InstanceType]):
                     runtime=timed_execution.runtime,
                     status=status,
                 )
-
-        update_spec = self._spec.set_execution_time(time.perf_counter() - start_time)
-        return BenchmarkExec(
-            _instances=instances,
-            _metrics=self._metrics,
-            _aggregators=self.aggregators,
+        self._spec.set_execution_time(time.perf_counter() - start_time)
+        return BenchmarkExec.new(
+            source=list(self.instances),
+            metrics=self.metrics,
+            aggregators=self.aggregators,
             logger=self.logger,
-            _spec=update_spec,
+            **self._spec.to_dict(),
         )
 
     async def run_async(self) -> None: ...

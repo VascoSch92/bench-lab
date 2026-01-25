@@ -1,5 +1,5 @@
 import collections
-import copy
+import time
 from dataclasses import dataclass
 from typing import DefaultDict
 
@@ -35,19 +35,20 @@ class BenchmarkExec(BaseBenchmark[InstanceType]):
         self.logger.info(f"Metric {metric.name} added successfully.")
 
     def evaluate(self) -> BenchmarkEval[InstanceType]:
-        instances = copy.deepcopy(self._instances)
+        start_time = time.perf_counter()
 
-        for metric in self._metrics:
-            for instance in instances:
+        for instance in self.instances:
+            for metric in self._metrics:
                 evals = metric.evaluate(instance=instance, attempts=instance.attempts)
                 instance.add_eval(metric_name=metric.name, evals=evals)
 
-        return BenchmarkEval(
-            _spec=self._spec,
-            _instances=instances,
+        self._spec.set_evaluation_time(time.perf_counter() - start_time)
+        return BenchmarkEval.new(
+            source=list(self.instances),
+            metrics=self.metrics,
+            aggregators=self.aggregators,
             logger=self.logger,
-            _metrics=self._metrics,
-            _aggregators=self._aggregators,
+            **self._spec.to_dict(),
         )
 
     def _generate_summary_table(self) -> table.Table:

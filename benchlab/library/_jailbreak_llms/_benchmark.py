@@ -4,8 +4,8 @@ import urllib.request
 from typing import final
 
 from benchlab import Benchmark
-from benchlab._library._jailbreak_llms._instance import JailbreakLLMsInstance
-from benchlab._library._jailbreak_llms._metrics import (
+from benchlab.library._jailbreak_llms._instance import JailbreakLLMsInstance
+from benchlab.library._jailbreak_llms._metrics import (
     JailbreakCheckerMetric,
     JailbreakCheckerUnsureMetric,
 )

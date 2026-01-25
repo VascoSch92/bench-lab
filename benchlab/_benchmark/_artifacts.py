@@ -36,7 +36,7 @@ class ArtifactType(StrEnum):
     """Artifact for the class `BenchmarkReport`."""
 
     @classmethod
-    def from_string(cls, input_: str):
+    def from_string(cls, input_: str) -> Self:
         """
         Converts a string input into a valid ArtifactType member.
 
@@ -138,13 +138,7 @@ class Artifact(Generic[InstanceType]):
     @property
     def type_(self) -> ArtifactType:
         """Returns the articat type of the artifact."""
-        class_name, class_module = (
-            self.metadata["class_name"],
-            self.metadata["class_module"],
-        )
-        if class_name.endswith("Benchmark") and "._library" in class_module:
-            return ArtifactType.BENCHMARK
-        return ArtifactType.from_string(class_name)
+        return ArtifactType.from_string(self.metadata["class_name"])
 
     def to_dict(self) -> dict[str, Any]:
         """Convert an Artifact to a dictionary."""
@@ -308,29 +302,31 @@ class BenchmarkArtifact(Generic[InstanceType]):
 
         match cls_type:
             case ArtifactType.BENCHMARK:
-                from_library = "._library" in artifact.metadata["class_module"]
                 return cls._instantiate_benchmark(
                     instances=artifact.instances,
                     metrics=artifact.metrics,
+                    aggregators=artifact.aggregators,
                     spec=artifact.spec,
-                    from_library=from_library,
                 )
             case ArtifactType.EXECUTION:
                 return cls._instantiate_benchmark_exec(
                     instances=artifact.instances,
                     metrics=artifact.metrics,
+                    aggregators=artifact.aggregators,
                     spec=artifact.spec,
                 )
             case ArtifactType.EVALUATION:
                 return cls._instantiate_benchmark_eval(
                     instances=artifact.instances,
                     metrics=artifact.metrics,
+                    aggregators=artifact.aggregators,
                     spec=artifact.spec,
                 )
             case ArtifactType.REPORT:
                 return cls._instantiate_benchmark_report(
                     instances=artifact.instances,
                     metrics=artifact.metrics,
+                    aggregators=artifact.aggregators,
                     spec=artifact.spec,
                 )
             case _:
@@ -340,8 +336,8 @@ class BenchmarkArtifact(Generic[InstanceType]):
     def _instantiate_benchmark(
         instances: list[InstanceType],
         metrics: list[Metric],
+        aggregators: list[Aggregator],
         spec: Spec,
-        from_library: bool,
     ) -> "Benchmark[InstanceType]":
         """
         Internal factory to create a Benchmark instance.
@@ -359,29 +355,18 @@ class BenchmarkArtifact(Generic[InstanceType]):
                     _evaluated_attempts={},
                 )
 
-        kwargs = spec.to_dict()
-        kwargs.pop("name")
-        if from_library:
-            return Benchmark.from_library(
-                name=spec.name,
-                instances=instances,
-                metric_names=[m.name for m in metrics],
-                **kwargs,
-            )
         return Benchmark.new(
-            name=spec.name,
-            instances=instances,
+            source=instances,
             metrics=metrics,
-            n_instance=spec.n_instance,
-            n_attempts=spec.n_attempts,
-            timeout=spec.timeout,
-            logs_filepath=spec.logs_filepath,
+            aggregators=aggregators,
+            **spec.to_dict(),
         )
 
     @staticmethod
     def _instantiate_benchmark_exec(
         instances: list[InstanceType],
         metrics: list[Metric],
+        aggregators: list[Aggregator],
         spec: Spec,
     ) -> "BenchmarkExec[InstanceType]":
         """
@@ -398,41 +383,46 @@ class BenchmarkArtifact(Generic[InstanceType]):
                     _evaluated_attempts={},
                 )
 
-        return BenchmarkExec(
-            _spec=spec,
-            _instances=instances,
-            _metrics=metrics,
+        return BenchmarkExec.new(
+            source=instances,
+            metrics=metrics,
+            aggregators=aggregators,
+            **spec.to_dict(),
         )
 
     @staticmethod
     def _instantiate_benchmark_eval(
         instances: list[InstanceType],
         metrics: list[Metric],
+        aggregators: list[Aggregator],
         spec: Spec,
     ) -> "BenchmarkEval[InstanceType]":
         """Internal factory to create a BenchmarkEval instance."""
         from benchlab._benchmark._states._evaluation import BenchmarkEval
 
-        return BenchmarkEval(
-            _instances=instances,
-            _metrics=metrics,
-            _spec=spec,
+        return BenchmarkEval.new(
+            source=instances,
+            metrics=metrics,
+            aggregators=aggregators,
+            **spec.to_dict(),
         )
 
     @staticmethod
     def _instantiate_benchmark_report(
         instances: list[InstanceType],
         metrics: list[Metric],
+        aggregators: list[Aggregator],
         spec: Spec,
     ) -> "BenchmarkReport[InstanceType]":
         """Internal factory to create a BenchmarkReport instance."""
 
         from benchlab._benchmark._states._report import BenchmarkReport
 
-        return BenchmarkReport(
-            _instances=instances,
-            _metrics=metrics,
-            _spec=spec,
+        return BenchmarkReport.new(
+            source=instances,
+            metrics=metrics,
+            aggregators=aggregators,
+            **spec.to_dict(),
         )
 
     def to_json(self, output_path: Path | str | None = None) -> None:
@@ -445,10 +435,10 @@ class BenchmarkArtifact(Generic[InstanceType]):
         """
         output_path = self._validate_path(output_path=output_path, extension=".json")
 
-        artifact_dict = self._artifact().to_dict()
+        artifact = self._artifact()
 
         with output_path.open("w") as f:
-            json.dump(artifact_dict, f, indent=4)
+            json.dump(artifact.to_dict(), f, indent=4)
 
     def to_csv(self, output_path: Path | str | None = None) -> None:
         """

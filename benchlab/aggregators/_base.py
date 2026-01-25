@@ -4,6 +4,7 @@ from enum import StrEnum
 from typing import Generic, ClassVar
 
 from benchlab._types import MetricOutputType, InstanceType
+from benchlab.utils import get_init_args
 
 
 class AggregatorType(StrEnum):
@@ -52,4 +53,5 @@ class Aggregator(ABC, Generic[MetricOutputType]):
         return {
             "class_module": self.__class__.__module__,
             "class_name": self.__class__.__name__,
+            "args": get_init_args(self),
         }

@@ -54,13 +54,13 @@ class BenchmarkEval(BaseBenchmark[InstanceType]):
                 case _:
                     raise RuntimeError(f"Unknown aggregator type: {aggregator}")
 
-        return BenchmarkReport(
-            _spec=self._spec,
-            _instances=self._instances,
-            _metrics=self._metrics,
-            _aggregators=self.aggregators,
-            _reports=reports,
+        # todo: fix this because we need report also
+        return BenchmarkReport.new(
+            source=list(self.instances),
+            metrics=self.metrics,
+            aggregators=self.aggregators,
             logger=self.logger,
+            **self._spec.to_dict(),
         )
 
     def _generate_summary_table(self) -> table.Table:

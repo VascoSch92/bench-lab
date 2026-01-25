@@ -1,13 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Generic, ClassVar, final, TYPE_CHECKING, Any
+from typing import Generic, ClassVar, final, Any
 
 from benchlab._instance import Attempt
 from benchlab._types import MetricOutputType, InstanceType
-
-if TYPE_CHECKING:
-    pass
+from benchlab.utils import get_init_args
 
 
 class MetricType(StrEnum):
@@ -51,6 +49,7 @@ class Metric(ABC, Generic[InstanceType, MetricOutputType]):
         return {
             "class_module": self.__class__.__module__,
             "class_name": self.__class__.__name__,
+            "args": get_init_args(self),
         }
 
     @abstractmethod
