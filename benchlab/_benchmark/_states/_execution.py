@@ -23,10 +23,6 @@ class BenchmarkExec(BaseBenchmark[InstanceType]):
     benchmark data into the evaluation phase.
     """
 
-    def _task_specific_checks(self) -> None:
-        # todo: complete with check that every instance was runned the correct number of times
-        pass
-
     def add_metric(self, metric: Metric) -> None:
         if metric in self._metrics:
             raise ValueError(f"Metric {metric} is already present.")

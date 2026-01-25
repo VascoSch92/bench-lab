@@ -7,6 +7,8 @@ from func_timeout import func_timeout, FunctionTimedOut  # type: ignore[import-u
 
 __all__ = ["timed_exec"]
 
+from benchlab._types import InstanceType
+
 
 @dataclass(frozen=True, slots=True)
 class TimedExec:
@@ -16,7 +18,7 @@ class TimedExec:
 
     @property
     def is_success(self) -> bool:
-        return self.exception is not None
+        return self.exception is None
 
     @property
     def is_timeout(self) -> bool:
@@ -34,12 +36,12 @@ class TimedExec:
 def timed_exec(
     fn: Callable,
     timeout: float | None,
-    *args,
-    **kwargs,
+    instance: InstanceType,
+    kwargs: dict[str, Any] | None = None,
 ) -> TimedExec:
     try:
         start = time.perf_counter()
-        result = func_timeout(timeout, fn, *args, **kwargs)
+        result = func_timeout(timeout, fn, args=(instance,), kwargs=kwargs)
         runtime = time.perf_counter() - start
         return TimedExec(
             result=result,

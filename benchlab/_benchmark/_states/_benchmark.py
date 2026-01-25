@@ -28,13 +28,10 @@ class Benchmark(BaseBenchmark[InstanceType]):
     transitions the benchmark into a `BenchmarkExec` state.
     """
 
-    def _task_specific_checks(self) -> None:
-        pass
-
     def run(
         self,
         fn: BenchmarkCallable,
-        args: dict[str, Any] | None = None,
+        kwargs: dict[str, Any] | None = None,
     ) -> BenchmarkExec:
         start_time = time.perf_counter()
 
@@ -47,7 +44,7 @@ class Benchmark(BaseBenchmark[InstanceType]):
         for instance in self.instances:
             for attempt_id in range(1, self._spec.n_attempts + 1):
                 timed_execution = timed_exec(
-                    fn, self._spec.timeout, instance, **(args or {})
+                    fn, self._spec.timeout, instance, kwargs
                 )
 
                 if timed_execution.is_success:

@@ -7,7 +7,7 @@ from rich import table
 
 from benchlab._benchmark._states._base import BaseBenchmark
 from benchlab._benchmark._states._report import BenchmarkReport
-from benchlab.aggregators._base import AggregatorType, Report
+from benchlab.aggregators._base import Report
 from benchlab.metrics._base import MetricType, Metric
 from benchlab._types import InstanceType
 
@@ -25,10 +25,6 @@ class BenchmarkEval(BaseBenchmark[InstanceType]):
     these scores into a final structured report.
     """
 
-    def _task_specific_checks(self) -> None:
-        # todo: complete with check for instance
-        pass
-
     @cached_property
     def _metric_type_to_metrics(self) -> DefaultDict[MetricType, list[Metric]]:
         map_ = collections.defaultdict(list)
@@ -37,30 +33,18 @@ class BenchmarkEval(BaseBenchmark[InstanceType]):
         return map_
 
     def report(self) -> BenchmarkReport[InstanceType]:
-        reports: list[Report] = []
-        for aggregator in self.aggregators:
-            match aggregator.type_:
-                case AggregatorType.RUNTIME:
-                    report = aggregator.aggregate(instances=self._instances)
-                    reports.append(report)
-                case AggregatorType.STATUS:
-                    report = aggregator.aggregate(instances=self._instances)
-                    reports.append(report)
-                case AggregatorType.BOOLEAN_METRICS:
-                    for metric in self._metric_type_to_metrics[aggregator.type_]:
-                        if metric.type_ == aggregator.type_:
-                            report = aggregator.aggregate(self.instances)
-                            reports.append(report)
-                case _:
-                    raise RuntimeError(f"Unknown aggregator type: {aggregator}")
+        reports: list[Report] = [
+            aggregator.aggregate(list(self.instances))
+            for aggregator in self.aggregators
+        ]
 
-        # todo: fix this because we need report also
         return BenchmarkReport.new(
             source=list(self.instances),
             metrics=self.metrics,
             aggregators=self.aggregators,
             logger=self.logger,
             **self._spec.to_dict(),
+            _reports=reports,
         )
 
     def _generate_summary_table(self) -> table.Table:

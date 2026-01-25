@@ -22,11 +22,6 @@ class BenchmarkReport(BaseBenchmark[InstanceType]):
 
     _reports: list[Report] = field(default_factory=list)
 
-    def _task_specific_checks(self) -> None:
-        # todo: better error message
-        if len(self.reports) != len(self.aggregators):
-            raise ValueError
-
     @property
     def reports(self) -> list[Report]:
         return self._reports

@@ -1,20 +1,20 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Generic, ClassVar
+from typing import Generic, ClassVar, Any
 
 from benchlab._types import MetricOutputType, InstanceType
 from benchlab.utils import get_init_args
 
 
 class AggregatorType(StrEnum):
-    RUNTIME = "runtime"
+    """The enum represents which type of category the aggregator will aggregate."""
 
-    STATUS = "status"
+    RUNTIMES = "runtimes"
 
-    REGRESSION_METRICS = "regression"
+    STATUSES = "statuses"
 
-    BOOLEAN_METRICS = "boolean"
+    METRICS = "metrics"
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,14 +37,18 @@ class Aggregator(ABC, Generic[MetricOutputType]):
 
     name: ClassVar[str]
     """Name of the entity being aggregated."""
+
     type_: ClassVar[AggregatorType]
     """Type of the entity being aggregated."""
+
+    target: str
+    """Target/column of the entity being aggregated."""
 
     @abstractmethod
     def aggregate(self, instances: list[InstanceType]) -> Report: ...
 
     @abstractmethod
-    def _inner(self, *args, **kwargs) -> float: ...
+    def _inner(self, *args, **kwargs) -> Any: ...
 
     @abstractmethod
     def _outer(self, *args, **kwargs) -> float: ...

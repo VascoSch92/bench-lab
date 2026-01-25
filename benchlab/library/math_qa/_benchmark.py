@@ -4,6 +4,11 @@ from datasets import load_dataset
 
 from benchlab import Benchmark
 from benchlab._types import InstanceType
+from benchlab.aggregators._aggregators import (
+    ConsensusAggregator,
+    StatusAggregator,
+    RuntimesAggregator,
+)
 from benchlab.dataset import Dataset
 from benchlab.library.math_qa._instance import MathQAInstance
 from benchlab.metrics import ExactMatchMetric
@@ -17,7 +22,7 @@ class MathQADataset(Dataset[MathQAInstance]):
             instance.id: idx for idx, instance in enumerate(self._instances)
         }
 
-    def get(self, idx: int | str) -> InstanceType:
+    def get(self, idx: int | str) -> MathQAInstance:
         if isinstance(idx, str):
             if idx in self._map_idx:
                 return self._instances[self._map_idx[idx]]
@@ -28,7 +33,7 @@ class MathQADataset(Dataset[MathQAInstance]):
         return len(self._instances)
 
     @staticmethod
-    def _load_dataset(split: str) -> list[InstanceType]:
+    def _load_dataset(split: str) -> list[MathQAInstance]:
         dataset = load_dataset("regisss/math_qa")
         split_ds = dataset[split]
 
@@ -52,5 +57,9 @@ MathQABench = partial(
     name="MathQABench",
     source=MathQADataset(),
     metrics=[ExactMatchMetric()],
-    aggregators=[],
+    aggregators=[
+        ConsensusAggregator(target=ExactMatchMetric.name),
+        StatusAggregator(),
+        RuntimesAggregator(),
+    ],
 )

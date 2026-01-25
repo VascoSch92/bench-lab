@@ -14,7 +14,8 @@ __all__ = [
 @dataclass(frozen=True, slots=True)
 class RuntimesAggregator(Aggregator[MetricOutputType]):
     name = "runtime_aggregator"
-    type_ = AggregatorType.RUNTIME
+    type_ = AggregatorType.RUNTIMES
+    target: str = "runtimes"
 
     def aggregate(self, instances: list[InstanceType]) -> Report:
         # Step 1: Intra-instance aggregation (Median)
@@ -55,7 +56,8 @@ class RuntimesAggregator(Aggregator[MetricOutputType]):
 @dataclass(frozen=True, slots=True)
 class StatusAggregator(Aggregator[MetricOutputType]):
     name = "status_success_rate_aggregator"
-    type_ = AggregatorType.STATUS
+    type_ = AggregatorType.STATUSES
+    target: str = "statuses"
 
     def aggregate(self, instances: list[InstanceType]) -> Report:
         instance_metrics = []
@@ -63,7 +65,7 @@ class StatusAggregator(Aggregator[MetricOutputType]):
         weights: list[int] = []
 
         for instance in instances:
-            # 1. Collect statuses (True for COMPLETED, False otherwise)
+            # 1. Collect statuses (True for `success`, False otherwise)
             # Assuming run.status is an Enum or String
             success_flags = [
                 1 if status == "success" else 0 for status in instance.statuses
@@ -95,22 +97,44 @@ class StatusAggregator(Aggregator[MetricOutputType]):
         return float(np.average(success_rates, weights=weights))
 
 
-# todo: complete here
-"""
 @dataclass(frozen=True, slots=True)
-class MacroAverageAggregator(Aggregator[BooleanOutputType]):
-    name: ClassVar[str] = "macro average"
-    value: float
+class ConsensusAggregator(Aggregator[MetricOutputType]):
+    name = "consensus"
+    type_ = AggregatorType.METRICS
 
     def aggregate(self, instances: list[InstanceType]) -> Report:
-        return Report(0, {})
+        if not instances:
+            raise ValueError("No instances to aggregate")
 
-    def _inner(self, data: np.ndarray) -> float:
+        # Extract metric outputs from instances
+        values = np.array(
+            [instance.evaluations[self.target] for instance in instances], dtype=float
+        )
 
+        inner_values = self._inner(values)
+        final_value = self._outer(inner_values)
+
+        return Report(
+            aggregator_name=self.name,
+            outer_output=final_value,
+            inner_output={
+                instance.id: inner_value
+                for instance, inner_value in zip(instances, inner_values)
+            },
+        )
+
+    def _inner(self, data: np.ndarray) -> np.ndarray:
+        """
+        Compute consensus strength as proportion of True / 1 values.
+        """
         if data.size == 0:
-            return 0.0
-        return np.nanmean(data)
+            raise ValueError("Empty data passed to _inner")
 
-    def _outer(self, inner_value: float) -> float:
-        return float(inner_value)
-"""
+        return np.mean(data, axis=1)
+
+    def _outer(self, inner_value: np.ndarray) -> int:
+        """
+        Convert consensus strength to final decision.
+        Majority vote: > 0.5 == True
+        """
+        return int(np.mean(inner_value) > 0.5)

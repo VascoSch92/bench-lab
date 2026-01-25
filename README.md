@@ -15,25 +15,20 @@ Simple example of the API.
 ```python
 import random
 
-# import your favorite benchmark from the library
 from benchlab.library.math_qa._benchmark import MathQABench
 
 
-def mock_model(instance) -> str:
+def mock_model(instance, s: str) -> str:
     random_answer = random.randint(1, 10)
-    return f"The answer for question {instance.id} is {random_answer}."
+    return f"The answer for question {instance.id} is {random_answer}. Or {s}"
 
 
 def main():
     # init the benchmark
     benchmark = MathQABench(n_instance=5)
-    
     # run your implementation on the benchmark
-    execution = benchmark.run(mock_model, args={"s": "ciao"})
-    
-    # evaluate them 
+    execution = benchmark.run(mock_model, kwargs={"s": "I don't know"})
     evaluation = execution.evaluate()
-    
     # finally, aggregate the results and print the benchmark report
     report = evaluation.report()
     report.summary()

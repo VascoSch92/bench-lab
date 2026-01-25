@@ -44,7 +44,7 @@ class BaseBenchmark(BenchmarkArtifact[InstanceType]):
 
     def __post_init__(self) -> None:
         self._check_consistency_instances()
-        self._task_specific_checks()
+        self._check_consistency_aggregators()
 
     def _check_consistency_instances(self) -> None:
         if not self._instances:
@@ -53,6 +53,17 @@ class BaseBenchmark(BenchmarkArtifact[InstanceType]):
         first_type = type(self._instances[0])
         if not all(type(i) is first_type for i in self._instances):
             raise ValueError("All instances must have the same type.")
+
+    def _check_consistency_aggregators(self) -> None:
+        available_metrics = {metric.name for metric in self._metrics}
+        for aggregator in self._aggregators:
+            if aggregator.type_ == "metrics":
+                metric_name = aggregator.target
+                if metric_name not in available_metrics:
+                    raise ValueError(
+                        f"Aggregator {aggregator.name} has metric target {aggregator.target}. "
+                        f"But not found in metrics."
+                    )
 
     @classmethod
     def new(
@@ -79,8 +90,8 @@ class BaseBenchmark(BenchmarkArtifact[InstanceType]):
             n_attempts=n_attempts,
             timeout=timeout,
             logs_filepath=logs_filepath,
-            execution_time=kwargs.get("execution_time", None),
-            evaluation_time=kwargs.get("evaluation_time", None),
+            execution_time=kwargs.pop("execution_time", None),
+            evaluation_time=kwargs.pop("evaluation_time", None),
         )
 
         dataset: Dataset[InstanceType] = (
@@ -99,10 +110,8 @@ class BaseBenchmark(BenchmarkArtifact[InstanceType]):
             _metrics=metrics or [],
             _aggregators=aggregators or [],
             logger=logger,
+            **kwargs,
         )
-
-    @abstractmethod
-    def _task_specific_checks(self) -> None: ...
 
     @property
     def spec(self) -> Spec:
