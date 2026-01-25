@@ -7,9 +7,9 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, Generic, TYPE_CHECKING, Union, Self
 
-from benchlab._benchmark._spec import Spec
+from benchlab._spec import Spec
 from benchlab.aggregators._base import Aggregator
-from benchlab.metrics._base import Metric
+from benchlab._metrics.base import Metric
 from benchlab._exceptions import ArtifactCorruptedError
 from benchlab._types import InstanceType
 
@@ -345,7 +345,7 @@ class BenchmarkArtifact(Generic[InstanceType]):
         Cleans instances of previous run data (attempts/evaluations) to ensure
         a fresh state and handles initialization via the library or direct creation.
         """
-        from benchlab._benchmark._states._benchmark import Benchmark
+        from benchlab._states._benchmark import Benchmark
 
         for j in range(len(instances)):
             if instances[j].attempts or instances[j].evaluations:
@@ -374,7 +374,7 @@ class BenchmarkArtifact(Generic[InstanceType]):
 
         Ensures that evaluation data is cleared while preserving execution attempts.
         """
-        from benchlab._benchmark._states._execution import BenchmarkExec
+        from benchlab._states._execution import BenchmarkExec
 
         for j in range(len(instances)):
             if instances[j].evaluations:
@@ -398,7 +398,7 @@ class BenchmarkArtifact(Generic[InstanceType]):
         spec: Spec,
     ) -> "BenchmarkEval[InstanceType]":
         """Internal factory to create a BenchmarkEval instance."""
-        from benchlab._benchmark._states._evaluation import BenchmarkEval
+        from benchlab._states._evaluation import BenchmarkEval
 
         return BenchmarkEval.new(
             source=instances,
@@ -416,7 +416,7 @@ class BenchmarkArtifact(Generic[InstanceType]):
     ) -> "BenchmarkReport[InstanceType]":
         """Internal factory to create a BenchmarkReport instance."""
 
-        from benchlab._benchmark._states._report import BenchmarkReport
+        from benchlab._states._report import BenchmarkReport
 
         return BenchmarkReport.new(
             source=instances,

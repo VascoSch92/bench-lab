@@ -22,29 +22,41 @@ class AttemptStatus(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Attempt:
+    """Represents a single attempt to solve a benchmark instance."""
+
     _response: AnswerType
+    """Response produced during the attempt."""
+
     _runtime: float | None
+    """Wall-clock runtime in seconds. `None` if attempt was not successfully."""
+
     _status: AttemptStatus
+    """Terminal status of the attempt."""
 
     @classmethod
     def new(
         cls, response: AnswerType, runtime: float | None, status: AttemptStatus
     ) -> "Attempt":
+        """Create a new Attempt instance."""
         return cls(response, runtime, status)
 
     @property
     def response(self) -> AnswerType | None:
+        """Return the response produced by the attempt."""
         return self._response
 
     @property
     def runtime(self) -> float | None:
+        """Return the runtime of the attempt in seconds, if available."""
         return self._runtime
 
     @property
     def status(self) -> AttemptStatus:
+        """Return the final status of the attempt."""
         return self._status
 
     def to_dict(self) -> dict[str, Any]:
+        """Serialize the attempt to a dictionary."""
         return {field_.name: getattr(self, field_.name) for field_ in fields(self)}
 
 

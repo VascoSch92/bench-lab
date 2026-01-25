@@ -5,7 +5,7 @@ from typing import ClassVar, final, Final
 from benchlab._instance import Attempt
 from benchlab._types import BooleanOutputType
 from benchlab.library._jailbreak_llms._instance import JailbreakLLMsInstance
-from benchlab.metrics._base import Metric, MetricType
+from benchlab._metrics.base import Metric, MetricType
 
 # fmt: off
 REFUSING_HINTS: Final[list[str]] = [

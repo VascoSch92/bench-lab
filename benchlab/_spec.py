@@ -7,7 +7,7 @@ __all_ = ["Spec"]
 
 @dataclass(frozen=True, slots=True)
 class Spec:
-    """Class containing specification about a benchmark artifact."""
+    """Class containing specification about a benchmark."""
 
     name: str
     instance_ids: list[str] = field(default_factory=list)
@@ -17,6 +17,7 @@ class Spec:
     logs_filepath: str | None = None
     execution_time: float | None = None
     evaluation_time: float | None = None
+    aggregation_time: float | None = None
 
     @classmethod
     def new(cls) -> Self:
@@ -45,3 +46,7 @@ class Spec:
     def set_evaluation_time(self, time: float) -> "Spec":
         """Returns a new instance of Spec with the updated evaluation_time."""
         return replace(self, evaluation_time=time)
+
+    def set_aggregation_time(self, time: float) -> "Spec":
+        """Returns a new instance of Spec with the updated `aggregation_time`."""
+        return replace(self, aggregation_time=time)

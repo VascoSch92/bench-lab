@@ -1,6 +1,6 @@
 import re
 
-from benchlab.metrics._base import Metric, MetricType
+from benchlab._metrics.base import Metric, MetricType
 from benchlab._instance import Attempt
 from benchlab._types import InstanceType
 

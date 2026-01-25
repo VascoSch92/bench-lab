@@ -1,15 +1,16 @@
 import collections
+import time
 from dataclasses import dataclass
 from functools import cached_property
 from typing import DefaultDict
 
 from rich import table
 
-from benchlab._benchmark._states._base import BaseBenchmark
-from benchlab._benchmark._states._report import BenchmarkReport
-from benchlab.aggregators._base import Report
-from benchlab.metrics._base import MetricType, Metric
+from benchlab._metrics.base import MetricType, Metric
+from benchlab._states._base import BaseBenchmark
+from benchlab._states._report import BenchmarkReport
 from benchlab._types import InstanceType
+from benchlab.aggregators._base import Report
 
 __all__ = ["BenchmarkEval"]
 
@@ -33,11 +34,14 @@ class BenchmarkEval(BaseBenchmark[InstanceType]):
         return map_
 
     def report(self) -> BenchmarkReport[InstanceType]:
+        start_time = time.perf_counter()
+
         reports: list[Report] = [
             aggregator.aggregate(list(self.instances))
             for aggregator in self.aggregators
         ]
 
+        self._spec.set_execution_time(time.perf_counter() - start_time)
         return BenchmarkReport.new(
             source=list(self.instances),
             metrics=self.metrics,

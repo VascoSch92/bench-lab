@@ -1,6 +1,6 @@
 import random
 
-from benchlab.library.math_qa._benchmark import MathQABench
+from benchlab.library.math_qa import MathQABench
 
 
 def mock_model(instance, s: str) -> str:

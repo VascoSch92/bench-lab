@@ -37,11 +37,12 @@ def timed_exec(
     fn: Callable,
     timeout: float | None,
     instance: InstanceType,
+    args: tuple = (),
     kwargs: dict[str, Any] | None = None,
 ) -> TimedExec:
     try:
         start = time.perf_counter()
-        result = func_timeout(timeout, fn, args=(instance,), kwargs=kwargs)
+        result = func_timeout(timeout, fn, args=(instance, *args), kwargs=kwargs)
         runtime = time.perf_counter() - start
         return TimedExec(
             result=result,

@@ -2,7 +2,7 @@ from dataclasses import dataclass, field
 
 from rich import table
 
-from benchlab._benchmark._states._base import BaseBenchmark
+from benchlab._states._base import BaseBenchmark
 from benchlab.aggregators._base import Report
 from benchlab._types import InstanceType
 

@@ -4,14 +4,15 @@ from typing import Any
 
 from rich import table
 
-from benchlab._benchmark._states._base import BaseBenchmark
-from benchlab._benchmark._states._execution import BenchmarkExec
+from benchlab._states._base import BaseBenchmark
+from benchlab._states._execution import BenchmarkExec
 from benchlab._types import BenchmarkCallable, InstanceType
 from benchlab.utils import timed_exec
 
 # todo: add token usage or better usage
 # todo: check how logger works if we have a logger in our main program
 # todo: update logging to use rich
+# todo: update logging for warning
 # todo: add callback method to stop retrying
 
 __all__ = ["Benchmark"]
@@ -31,20 +32,23 @@ class Benchmark(BaseBenchmark[InstanceType]):
     def run(
         self,
         fn: BenchmarkCallable,
+        args: tuple = (),
         kwargs: dict[str, Any] | None = None,
     ) -> BenchmarkExec:
         start_time = time.perf_counter()
 
         self.logger.info(f"Running benchmark {self._spec.name} for {fn.__name__}")
 
-        return_type = fn.__annotations__.get("return", None)
-        if return_type is None:
-            self.logger.warning("No return type detected")
+        self._check_consistency_signature(fn)
 
         for instance in self.instances:
             for attempt_id in range(1, self._spec.n_attempts + 1):
                 timed_execution = timed_exec(
-                    fn, self._spec.timeout, instance, kwargs
+                    fn=fn,
+                    timeout=self._spec.timeout,
+                    instance=instance,
+                    args=args,
+                    kwargs=kwargs,
                 )
 
                 if timed_execution.is_success:
@@ -74,6 +78,12 @@ class Benchmark(BaseBenchmark[InstanceType]):
             logger=self.logger,
             **self._spec.to_dict(),
         )
+
+    # todo: complete the following method
+    def _check_consistency_signature(self, fn: BenchmarkCallable) -> None:
+        return_type = fn.__annotations__.get("return", None)
+        if return_type is None:
+            self.logger.warning("No return type detected")
 
     async def run_async(self) -> None: ...
 

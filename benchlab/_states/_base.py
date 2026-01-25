@@ -6,12 +6,12 @@ from typing import Self, Any, Sequence
 
 from rich import console, table
 
-from benchlab._benchmark._artifacts import BenchmarkArtifact
-from benchlab._benchmark._spec import Spec
+from benchlab._artifacts import BenchmarkArtifact
+from benchlab._spec import Spec
 from benchlab.aggregators._base import Aggregator
-from benchlab.metrics._base import Metric
+from benchlab._metrics.base import Metric
 from benchlab._types import InstanceType
-from benchlab.dataset import Dataset, ListDataset
+from benchlab._dataset import Dataset, ListDataset
 from benchlab.utils import get_logger
 
 
@@ -92,6 +92,7 @@ class BaseBenchmark(BenchmarkArtifact[InstanceType]):
             logs_filepath=logs_filepath,
             execution_time=kwargs.pop("execution_time", None),
             evaluation_time=kwargs.pop("evaluation_time", None),
+            aggregation_time=kwargs.pop("aggregation_time", None),
         )
 
         dataset: Dataset[InstanceType] = (

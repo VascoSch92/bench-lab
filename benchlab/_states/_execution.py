@@ -5,9 +5,9 @@ from typing import DefaultDict
 
 from rich import table
 
-from benchlab._benchmark._states._base import BaseBenchmark
-from benchlab._benchmark._states._evaluation import BenchmarkEval
-from benchlab.metrics._base import Metric
+from benchlab._states._base import BaseBenchmark
+from benchlab._states._evaluation import BenchmarkEval
+from benchlab._metrics.base import Metric
 from benchlab._types import InstanceType
 
 __all__ = ["BenchmarkExec"]
