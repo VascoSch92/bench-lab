@@ -1,3 +1,4 @@
+import logging
 import random
 
 from benchlab.library.math_qa import MathQABench
@@ -13,7 +14,7 @@ def mock_model(instance, s: str) -> CallableOutput:
 
 
 def main():
-    benchmark = MathQABench(n_instance=5)
+    benchmark = MathQABench(n_instance=5, logging_level=logging.DEBUG)
     execution = benchmark.run(mock_model, kwargs={"s": "I don't know"})
     execution.summary()
     evaluation = execution.evaluate()

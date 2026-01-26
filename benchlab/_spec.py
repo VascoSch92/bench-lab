@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field, fields, replace
+from dataclasses import dataclass, fields, replace
 from typing import Self
 from uuid import uuid4
 
@@ -10,7 +10,7 @@ class Spec:
     """Class containing specification about a benchmark."""
 
     name: str
-    instance_ids: list[str] = field(default_factory=list)
+    instance_ids: list[str] | None = None
     n_attempts: int = 1
     n_instance: int | None = None
     timeout: float | None = None

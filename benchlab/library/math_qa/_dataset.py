@@ -1,4 +1,4 @@
-from datasets import load_dataset   # type: ignore[import-untyped]
+from datasets import load_dataset  # type: ignore[import-untyped]
 
 from benchlab._dataset import Dataset
 from benchlab.library.math_qa._instance import MathQAInstance

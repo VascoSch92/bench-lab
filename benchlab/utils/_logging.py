@@ -2,6 +2,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Literal
+from rich.logging import RichHandler
 
 import yaml
 
@@ -57,26 +58,31 @@ class LogFormatter(logging.Formatter):
         return s
 
 
-# todo: make that we can change the level of the logging
-
-
 def get_logger(
     name: str,
     path: Path | str | None = None,
     console: bool = True,
+    level: int = logging.INFO,
 ) -> logging.Logger:
     """Returns a configured logger."""
     logger = logging.getLogger(name)
 
-    if not logger.hasHandlers():
-        logger.setLevel(logging.DEBUG)
+    if not logger.handlers:
+        logger.setLevel(level)
+        logger.propagate = False
 
         if console:
-            console_handler = logging.StreamHandler()
-            console_handler.setLevel(logging.DEBUG)
+            console_handler = RichHandler(
+                level=level,
+                rich_tracebacks=True,
+                show_time=True,
+                show_level=True,
+                show_path=False,
+                markup=True,
+            )
+            console_handler.setLevel(level)
             console_formatter = logging.Formatter(
-                "[%(asctime)s - %(name)s - %(levelname)s] %(message)s",
-                datefmt="%Y-%m-%d %H:%M:%S",
+                "[bold]OpenBench[/bold] | %(message)s"
             )
             console_handler.setFormatter(console_formatter)
             logger.addHandler(console_handler)

@@ -77,15 +77,18 @@ class BaseBenchmark(BenchmarkArtifact[InstanceType]):
         n_attempts: int = 1,
         timeout: float | None = None,
         logs_filepath: str | None = None,
-        logger: logging.Logger = logging.getLogger("null"),
+        logger: logging.Logger | None = None,
+        logging_level: int = logging.INFO,
         **kwargs: Any,
     ) -> Self:
         if logger is None:
-            logger = get_logger(name=__name__, path=logs_filepath, console=True)
+            logger = get_logger(
+                name=__name__, path=logs_filepath, console=True, level=logging_level
+            )
 
         spec = Spec(
             name=name,
-            instance_ids=instance_ids or [],
+            instance_ids=instance_ids,
             n_instance=n_instance,
             n_attempts=n_attempts,
             timeout=timeout,

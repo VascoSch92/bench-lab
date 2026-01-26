@@ -11,8 +11,6 @@ from benchlab.utils import timed_exec
 
 
 # todo: check how logger works if we have a logger in our main program
-# todo: update logging to use rich
-# todo: update logging for warning
 # todo: add callback method to stop retrying
 
 __all__ = ["Benchmark"]
@@ -38,7 +36,7 @@ class Benchmark(BaseBenchmark[InstanceType]):
         start_time = time.perf_counter()
 
         self.logger.info(f"Running benchmark {self._spec.name} for {fn.__name__}")
-
+        self.logger.debug(f"Running benchmark {self._spec.name} for {fn.__name__}")
         self._check_consistency_signature(fn)
 
         for instance in self.instances:
@@ -52,7 +50,7 @@ class Benchmark(BaseBenchmark[InstanceType]):
                 )
 
                 if timed_execution.is_success:
-                    self.logger.info(f"Instance {instance.id} successfull benchmarked")
+                    self.logger.info(f"Instance {instance.id} successful benchmarked")
                     status = "success"
                 elif timed_execution.is_timeout:
                     self.logger.info(f"Instance {instance.id} timed out")
@@ -131,10 +129,10 @@ class Benchmark(BaseBenchmark[InstanceType]):
 
         # Metrics & Aggregators
         metrics_list = ", ".join([m.name for m in self._metrics]) or "None"
-        aggs_list = ", ".join([a.name for a in self.aggregators]) or "None"
+        aggregator_list = ", ".join([a.name for a in self.aggregators]) or "None"
 
         summary_table.add_row("Metrics", metrics_list)
-        summary_table.add_row("Aggregators", aggs_list)
+        summary_table.add_row("Aggregators", aggregator_list)
         if self._spec.logs_filepath:
             summary_table.add_row("Logs Path", self._spec.logs_filepath)
 

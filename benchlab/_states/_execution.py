@@ -59,13 +59,15 @@ class BenchmarkExec(BaseBenchmark[InstanceType]):
         summary_table.add_column("Success Runs", style="green")
         summary_table.add_column("Failure Runs", style="red")
         summary_table.add_column("Timeout runs", style="yellow")
-        summary_table.add_column("Execution Time", style="cyan")
+        summary_table.add_column("Execution Time (s)", style="cyan")
 
         summary_table.add_row(
             str(stats["success"]),
             str(stats["failure"]),
             str(stats["timeout"]),
-            str(self._spec.execution_time),
+            str(round(self._spec.execution_time))
+            if self._spec.execution_time is not None
+            else None,
         )
 
         return summary_table
