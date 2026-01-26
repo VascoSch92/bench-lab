@@ -4,6 +4,8 @@ from typing import Any
 from benchlab._instance import Instance
 from benchlab._types import AnswerType
 
+__all__ = ["MathQAInstance"]
+
 
 @dataclass(slots=True, frozen=True, kw_only=True)
 class MathQAInstance(Instance):

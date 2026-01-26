@@ -1,7 +1,13 @@
-from datasets import load_dataset
+from datasets import load_dataset   # type: ignore[import-untyped]
 
 from benchlab._dataset import Dataset
 from benchlab.library.math_qa._instance import MathQAInstance
+from typing import Final
+
+__all__ = ["MathQADataset"]
+
+
+HF_DATASET: Final[str] = "regisss/math_qa"
 
 
 class MathQADataset(Dataset[MathQAInstance]):
@@ -24,7 +30,7 @@ class MathQADataset(Dataset[MathQAInstance]):
 
     @staticmethod
     def _load_dataset(split: str) -> list[MathQAInstance]:
-        dataset = load_dataset("regisss/math_qa")
+        dataset = load_dataset(HF_DATASET)
         split_ds = dataset[split]
 
         return [
