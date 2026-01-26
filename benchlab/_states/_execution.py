@@ -25,7 +25,7 @@ class BenchmarkExec(BaseBenchmark[InstanceType]):
 
     def add_metric(self, metric: Metric) -> None:
         if metric in self._metrics:
-            raise ValueError(f"Metric {metric} is already present.")
+            self.logger.info(f"Metric {metric.name} already present.")
 
         self._metrics.append(metric)
         self.logger.info(f"Metric {metric.name} added successfully.")
@@ -38,13 +38,13 @@ class BenchmarkExec(BaseBenchmark[InstanceType]):
                 evals = metric.evaluate(instance=instance, attempts=instance.attempts)
                 instance.add_eval(metric_name=metric.name, evals=evals)
 
-        self._spec.set_evaluation_time(time.perf_counter() - start_time)
+        updated_spec = self._spec.set_evaluation_time(time.perf_counter() - start_time)
         return BenchmarkEval.new(
             source=list(self.instances),
             metrics=self.metrics,
             aggregators=self.aggregators,
             logger=self.logger,
-            **self._spec.to_dict(),
+            **updated_spec.to_dict(),
         )
 
     def _generate_summary_table(self) -> table.Table:
@@ -52,13 +52,7 @@ class BenchmarkExec(BaseBenchmark[InstanceType]):
 
         for instance in self.instances:
             for status in instance.statuses:
-                match status:
-                    case "success":
-                        stats["success"] += 1
-                    case "failure":
-                        stats["failure"] += 1
-                    case "timeout":
-                        stats["timeout"] += 1
+                stats[status] += 1
 
         summary_table = table.Table(title="Execution Summary")
 

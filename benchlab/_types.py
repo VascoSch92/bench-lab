@@ -1,4 +1,12 @@
-from typing import TypeAlias, Protocol, runtime_checkable, Any, TypeVar, TYPE_CHECKING
+from typing import (
+    TypeAlias,
+    Protocol,
+    runtime_checkable,
+    Any,
+    TypeVar,
+    TYPE_CHECKING,
+    TypedDict,
+)
 
 if TYPE_CHECKING:
     from ._instance import Instance
@@ -13,6 +21,11 @@ AnswerType: TypeAlias = str | None
 """Type alias for the answer type of a LLM."""
 
 
+class CallableOutput(TypedDict, total=False):
+    answer: str | None
+    tokens_usage: dict[str, int] | None
+
+
 @runtime_checkable
 class BenchmarkCallable(Protocol):
     """Protocol for callable runnable in a benchmark instance."""
@@ -21,7 +34,7 @@ class BenchmarkCallable(Protocol):
 
     def __call__(
         self, instance: InstanceType, *args: Any, **kwargs: Any
-    ) -> AnswerType: ...
+    ) -> CallableOutput: ...
 
 
 """Typying for metric stats."""

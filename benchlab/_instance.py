@@ -33,12 +33,19 @@ class Attempt:
     _status: AttemptStatus
     """Terminal status of the attempt."""
 
+    _token_usage: dict[str, int] = field(default_factory=dict)
+    """Token usage relative to the attempt."""
+
     @classmethod
     def new(
-        cls, response: AnswerType, runtime: float | None, status: AttemptStatus
+        cls,
+        response: AnswerType,
+        runtime: float | None,
+        status: AttemptStatus,
+        token_usage: dict[str, int],
     ) -> "Attempt":
         """Create a new Attempt instance."""
-        return cls(response, runtime, status)
+        return cls(response, runtime, status, token_usage)
 
     @property
     def response(self) -> AnswerType | None:
@@ -54,6 +61,10 @@ class Attempt:
     def status(self) -> AttemptStatus:
         """Return the final status of the attempt."""
         return self._status
+
+    @property
+    def token_usage(self) -> MappingProxyType[str, int]:
+        return MappingProxyType(self._token_usage)
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize the attempt to a dictionary."""
@@ -93,15 +104,26 @@ class Instance(ABC):
     def evaluations(self) -> MappingProxyType[str, list[Any]]:
         return MappingProxyType(self._evaluated_attempts)
 
+    def token_usage(self) -> MappingProxyType[str, int]:
+        token_usage: dict[str, int] = {}
+        for attempt in self.attempts:
+            for key, value in attempt.token_usage.items():
+                token_usage[key] = token_usage.get(key, 0) + value
+        return MappingProxyType(token_usage)
+
     def add_attempt(
-        self, response: AnswerType, runtime: float | None, status: str
+        self,
+        response: AnswerType,
+        runtime: float | None,
+        status: str,
+        token_usage: dict[str, int],
     ) -> None:
         if runtime is not None and runtime < 0.0:
             raise ValueError(f"Runtime must be greater than zero. Got {runtime}")
         if status not in AttemptStatus:
             raise ValueError(f"Status must be one of {AttemptStatus.__members__}")
 
-        attempt = Attempt.new(response, runtime, AttemptStatus(status))
+        attempt = Attempt.new(response, runtime, AttemptStatus(status), token_usage)
         self._attempts.append(attempt)
 
     def add_eval(self, metric_name: str, evals: list[Any]) -> None:

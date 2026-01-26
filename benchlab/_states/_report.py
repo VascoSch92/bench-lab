@@ -33,6 +33,8 @@ class BenchmarkReport(BaseBenchmark[InstanceType]):
         summary_table.add_column("Value")
 
         for report in self.reports:
-            summary_table.add_row(report.aggregator_name, str(report.outer_output))
+            summary_table.add_row(
+                report.aggregator_name, str(round(report.outer_output, 2))
+            )
 
         return summary_table

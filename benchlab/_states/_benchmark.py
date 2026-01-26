@@ -9,7 +9,7 @@ from benchlab._states._execution import BenchmarkExec
 from benchlab._types import BenchmarkCallable, InstanceType
 from benchlab.utils import timed_exec
 
-# todo: add token usage or better usage
+
 # todo: check how logger works if we have a logger in our main program
 # todo: update logging to use rich
 # todo: update logging for warning
@@ -65,25 +65,50 @@ class Benchmark(BaseBenchmark[InstanceType]):
                 else:
                     raise RuntimeError("This should never happens.")
 
+                response = (
+                    timed_execution.result.pop("answer", None)
+                    if timed_execution.result
+                    else None
+                )
+                token_usage = (
+                    timed_execution.result.pop("tokens_usage", None)
+                    if timed_execution.result
+                    else {}
+                )
                 instance.add_attempt(
-                    response=timed_execution.result,
+                    response=response,
                     runtime=timed_execution.runtime,
                     status=status,
+                    token_usage=token_usage,
                 )
-        self._spec.set_execution_time(time.perf_counter() - start_time)
+
+        updated_spec = self._spec.set_execution_time(time.perf_counter() - start_time)
         return BenchmarkExec.new(
             source=list(self.instances),
             metrics=self.metrics,
             aggregators=self.aggregators,
             logger=self.logger,
-            **self._spec.to_dict(),
+            **updated_spec.to_dict(),
         )
 
-    # todo: complete the following method
     def _check_consistency_signature(self, fn: BenchmarkCallable) -> None:
-        return_type = fn.__annotations__.get("return", None)
-        if return_type is None:
-            self.logger.warning("No return type detected")
+        annotations = fn.__annotations__
+        return_type = annotations.pop("return", None)
+        warning_msg: list[str] = []
+        if not annotations:
+            warning_msg.append("No annotations provided.")
+        elif return_type is None:
+            warning_msg.append("No return type provided.")
+
+        if warning_msg:
+            warning_msg.append(
+                """
+                Note that we expect an annotated callable, with return type `BenchmarkOutput`, or an equivalent dict.\n
+                Example: 
+                    def fn(instance, *args, **kwargs) -> BenchmarkOutput: ...\n
+                """
+            )
+            self.logger.warning(warning_msg)
 
     async def run_async(self) -> None: ...
 

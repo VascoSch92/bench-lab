@@ -41,13 +41,13 @@ class BenchmarkEval(BaseBenchmark[InstanceType]):
             for aggregator in self.aggregators
         ]
 
-        self._spec.set_execution_time(time.perf_counter() - start_time)
+        updated_spec = self._spec.set_execution_time(time.perf_counter() - start_time)
         return BenchmarkReport.new(
             source=list(self.instances),
             metrics=self.metrics,
             aggregators=self.aggregators,
             logger=self.logger,
-            **self._spec.to_dict(),
+            **updated_spec.to_dict(),
             _reports=reports,
         )
 

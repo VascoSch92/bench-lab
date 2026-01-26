@@ -124,7 +124,6 @@ class Artifact(Generic[InstanceType]):
 
     def __post_init__(self):
         if "class_name" not in self.metadata or "class_module" not in self.metadata:
-            # todo: implement our excpetion ArtifactCorrupted
             raise ArtifactCorruptedError(
                 "Artifact metadata must contain `class_name` and `class_module`fields."
             )
@@ -247,8 +246,8 @@ class BenchmarkArtifact(Generic[InstanceType]):
     like JSON and CSV.
     """
 
-    def _artifact(self) -> Artifact[InstanceType]:
-        """Creates an intermediate Artifact representation of the current instance."""
+    def _generate_artifact(self) -> Artifact[InstanceType]:
+        """Creates an Artifact representation of the current instance."""
         return Artifact(
             metadata={
                 "class_name": self.__class__.__name__,
@@ -435,7 +434,7 @@ class BenchmarkArtifact(Generic[InstanceType]):
         """
         output_path = self._validate_path(output_path=output_path, extension=".json")
 
-        artifact = self._artifact()
+        artifact = self._generate_artifact()
 
         with output_path.open("w") as f:
             json.dump(artifact.to_dict(), f, indent=4)
@@ -448,39 +447,42 @@ class BenchmarkArtifact(Generic[InstanceType]):
         evaluations into a tabular format suitable for data analysis tools.
 
         Args:
-            output_path: Destination path for the CSV file.
+            output_path: Destination path for the CSV file. If `None`, the current
+                working directory is taken as `output_path`.
         """
         output_path = self._validate_path(output_path=output_path, extension=".csv")
 
-        artifact = self._artifact()
+        artifact = self._generate_artifact()
         instances: list[InstanceType] = artifact.instances
 
-        # Base table
-        headers: list[str] = ["id", "ground_truth"]
-        for j in range(len(instances[0].attempts)):
-            headers.extend([f"attempt_{j + 1}", f"runtime_{j + 1}", f"status_{j + 1}"])
-            for metric_name in instances[0].evaluations:
-                headers.append(f"{metric_name}_{j + 1}")
-
-        rows: list[dict] = []
+        # base header of the table
+        rows: list[dict[str, Any]] = []
         for instance in instances:
+            # base data about the instance
             row: dict[str, Any] = {
                 "id": instance.id,
                 "ground_truth": instance.ground_truth,
             }
+
+            # adding data relative to the instance attempts
             for idx, attempt in enumerate(instance.attempts, 1):
-                row[f"attempt_{idx}"] = attempt.response
-                row[f"runtime_{idx}"] = (
-                    round(attempt.runtime, 4) if attempt.runtime else None
+                row[f"attempt_{idx}_response"] = attempt.response
+                row[f"attempt_{idx}_status"] = attempt.status
+                row[f"attempt_{idx}_runtime"] = (
+                    round(attempt.runtime, 2) if attempt.runtime else None
                 )
-                row[f"status_{idx}"] = attempt.status
+                if attempt.token_usage:
+                    for k, v in attempt.token_usage.items():
+                        row[f"attempt_{idx}_{k}"] = v
 
-                for metric, values in instance.evaluations.items():
-                    row[f"{metric}_{idx}"] = values[idx - 1]
+            # metrics data
+            for metric_name, evals in instance.evaluations.items():
+                for idx, eval_ in enumerate(evals, 1):
+                    row[f"attempt_{idx}_{metric_name}"] = eval_
 
-            assert len(row) == len(headers)
             rows.append(row)
 
+        headers = list(rows[0].keys()) if len(rows) > 0 else []
         with output_path.open("w", newline="", encoding="utf-8") as f:
             writer = csv.DictWriter(f, fieldnames=headers)
             writer.writeheader()

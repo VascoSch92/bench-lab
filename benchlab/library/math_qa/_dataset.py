@@ -1,6 +1,6 @@
 from datasets import load_dataset
 
-from benchlab.dataset import Dataset
+from benchlab._dataset import Dataset
 from benchlab.library.math_qa._instance import MathQAInstance
 
 
